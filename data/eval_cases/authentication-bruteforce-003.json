@@ -1,0 +1,11 @@
+{
+  "id": "authentication-bruteforce-003",
+  "input_log": "2026-03-30 08:11:02 ERROR failed login for user admin from 192.168.1.50\n2026-03-30 08:11:03 WARN account lock threshold is now 4 of 5\n2026-03-30 08:11:04 WARN repeated credential failures detected",
+  "expected_incident_type": "authentication",
+  "expected_severity": "high",
+  "expected_root_cause_keywords": [
+    "failed login",
+    "lock",
+    "credential"
+  ]
+}

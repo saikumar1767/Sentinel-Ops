@@ -1,0 +1,11 @@
+{
+  "id": "disk-full-004",
+  "input_log": "2026-03-30 09:01:05 WARN disk usage on drive C reached 98 percent\n2026-03-30 09:01:06 ERROR no space left on device while writing backup archive\n2026-03-30 09:01:07 ERROR backup job failed",
+  "expected_incident_type": "disk",
+  "expected_severity": "high",
+  "expected_root_cause_keywords": [
+    "disk",
+    "space",
+    "full"
+  ]
+}

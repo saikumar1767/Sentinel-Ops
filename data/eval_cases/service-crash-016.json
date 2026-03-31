@@ -1,0 +1,11 @@
+{
+  "id": "service-crash-016",
+  "input_log": "2026-03-30 19:01:44 ERROR worker process crashed with segmentation fault\n2026-03-30 19:01:45 WARN supervisor restarting reporting-service for the third time\n2026-03-30 19:01:46 ERROR health checks continue to fail after restart",
+  "expected_incident_type": "service",
+  "expected_severity": "high",
+  "expected_root_cause_keywords": [
+    "crash",
+    "segmentation fault",
+    "restart"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "configuration-redis-013",
+  "input_log": "2026-03-30 16:18:32 ERROR missing config value REDIS_URL\n2026-03-30 16:18:32 ERROR worker service refused to start\n2026-03-30 16:18:33 WARN check application configuration secrets",
+  "expected_incident_type": "configuration",
+  "expected_severity": "high",
+  "expected_root_cause_keywords": [
+    "missing",
+    "config",
+    "redis_url"
+  ]
+}

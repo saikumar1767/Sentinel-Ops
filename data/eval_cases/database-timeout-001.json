@@ -1,0 +1,11 @@
+{
+  "id": "database-timeout-001",
+  "input_log": "2026-03-30 07:10:22 ERROR database connection timeout after 30 seconds\n2026-03-30 07:10:23 WARN retrying connection attempt 1 of 3\n2026-03-30 07:10:24 ERROR connection pool exhausted",
+  "expected_incident_type": "database",
+  "expected_severity": "high",
+  "expected_root_cause_keywords": [
+    "timeout",
+    "database",
+    "connection"
+  ]
+}

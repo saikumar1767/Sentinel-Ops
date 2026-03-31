@@ -1,0 +1,11 @@
+{
+  "id": "performance-cpu-008",
+  "input_log": "2026-03-30 12:15:21 WARN CPU usage above 95 percent for 10 minutes on api-worker-2\n2026-03-30 12:15:22 WARN request latency p95 increased to 4.8 seconds\n2026-03-30 12:15:23 INFO autoscaling recommendation emitted",
+  "expected_incident_type": "performance",
+  "expected_severity": "medium",
+  "expected_root_cause_keywords": [
+    "cpu",
+    "utilization",
+    "latency"
+  ]
+}

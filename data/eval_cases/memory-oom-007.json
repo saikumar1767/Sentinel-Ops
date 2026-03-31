@@ -1,0 +1,11 @@
+{
+  "id": "memory-oom-007",
+  "input_log": "2026-03-30 11:33:01 ERROR java.lang.OutOfMemoryError: Java heap space\n2026-03-30 11:33:01 ERROR container checkout-worker terminated with exit code 137\n2026-03-30 11:33:02 WARN pod restarted by orchestrator",
+  "expected_incident_type": "memory",
+  "expected_severity": "high",
+  "expected_root_cause_keywords": [
+    "memory",
+    "heap",
+    "outofmemory"
+  ]
+}

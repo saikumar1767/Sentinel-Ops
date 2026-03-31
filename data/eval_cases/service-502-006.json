@@ -1,0 +1,11 @@
+{
+  "id": "service-502-006",
+  "input_log": "2026-03-30 10:22:41 ERROR upstream service returned HTTP 502 for request id req-1842\n2026-03-30 10:22:42 WARN circuit breaker opened for payments-gateway\n2026-03-30 10:22:43 ERROR checkout requests are failing",
+  "expected_incident_type": "service",
+  "expected_severity": "high",
+  "expected_root_cause_keywords": [
+    "upstream",
+    "502",
+    "gateway"
+  ]
+}

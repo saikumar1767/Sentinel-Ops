@@ -1,0 +1,11 @@
+{
+  "id": "configuration-missing-env-005",
+  "input_log": "2026-03-30 09:45:10 ERROR deployment aborted because PAYMENT_API_KEY is missing\n2026-03-30 09:45:10 ERROR service checkout-api exited during bootstrap\n2026-03-30 09:45:11 WARN verify environment variables before retry",
+  "expected_incident_type": "configuration",
+  "expected_severity": "high",
+  "expected_root_cause_keywords": [
+    "missing",
+    "environment",
+    "configuration"
+  ]
+}

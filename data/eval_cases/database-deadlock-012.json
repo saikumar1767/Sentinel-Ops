@@ -1,0 +1,11 @@
+{
+  "id": "database-deadlock-012",
+  "input_log": "2026-03-30 15:42:55 ERROR deadlock detected in orders table transaction 88413\n2026-03-30 15:42:55 WARN transaction rolled back by database engine\n2026-03-30 15:42:56 ERROR lock wait timeout exceeded",
+  "expected_incident_type": "database",
+  "expected_severity": "high",
+  "expected_root_cause_keywords": [
+    "deadlock",
+    "transaction",
+    "lock"
+  ]
+}

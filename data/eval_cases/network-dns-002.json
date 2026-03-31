@@ -1,0 +1,11 @@
+{
+  "id": "network-dns-002",
+  "input_log": "2026-03-30 07:42:13 ERROR failed to resolve api.internal.local\n2026-03-30 07:42:13 ERROR DNS lookup timed out after 5 seconds\n2026-03-30 07:42:14 WARN service requests are backing up",
+  "expected_incident_type": "network",
+  "expected_severity": "high",
+  "expected_root_cause_keywords": [
+    "dns",
+    "resolve",
+    "lookup"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "security-ransomware-015",
+  "input_log": "2026-03-30 18:27:05 CRITICAL antivirus detected ransomware signature on host ws-finance-07\n2026-03-30 18:27:06 CRITICAL suspicious encryption process quarantined automatically\n2026-03-30 18:27:07 WARN incident response pager triggered",
+  "expected_incident_type": "security",
+  "expected_severity": "critical",
+  "expected_root_cause_keywords": [
+    "ransomware",
+    "malware",
+    "signature"
+  ]
+}

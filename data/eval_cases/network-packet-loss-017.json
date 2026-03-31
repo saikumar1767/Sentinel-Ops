@@ -1,0 +1,11 @@
+{
+  "id": "network-packet-loss-017",
+  "input_log": "2026-03-30 19:40:51 WARN packet loss reached 35 percent between app subnet and db subnet\n2026-03-30 19:40:52 WARN repeated connection reset by peer events detected\n2026-03-30 19:40:54 INFO failover routing under review",
+  "expected_incident_type": "network",
+  "expected_severity": "high",
+  "expected_root_cause_keywords": [
+    "packet loss",
+    "reset",
+    "network"
+  ]
+}

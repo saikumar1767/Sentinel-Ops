@@ -1,0 +1,11 @@
+{
+  "id": "queue-backlog-009",
+  "input_log": "2026-03-30 13:08:40 ERROR queue backlog exceeded 50000 messages on payments-events\n2026-03-30 13:08:41 WARN consumer lag is increasing across three workers\n2026-03-30 13:08:42 ERROR downstream processing delay breached SLA",
+  "expected_incident_type": "queue",
+  "expected_severity": "high",
+  "expected_root_cause_keywords": [
+    "backlog",
+    "lag",
+    "queue"
+  ]
+}

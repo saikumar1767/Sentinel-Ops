@@ -1,0 +1,11 @@
+{
+  "id": "api-rate-limit-011",
+  "input_log": "2026-03-30 15:04:19 WARN partner API rate limit exceeded for endpoint /v1/charges\n2026-03-30 15:04:20 ERROR received HTTP 429 from upstream billing-api\n2026-03-30 15:04:21 INFO retry scheduled in 30 seconds",
+  "expected_incident_type": "api",
+  "expected_severity": "high",
+  "expected_root_cause_keywords": [
+    "rate limit",
+    "429",
+    "throttle"
+  ]
+}

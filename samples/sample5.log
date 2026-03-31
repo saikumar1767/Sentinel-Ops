@@ -1,0 +1,2 @@
+2026-03-29 15:02:17 ERROR upstream service returned HTTP 502 for request id req-1842
+2026-03-29 15:02:18 WARN circuit breaker opened for service payments-gateway

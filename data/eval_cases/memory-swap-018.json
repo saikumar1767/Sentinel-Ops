@@ -1,0 +1,11 @@
+{
+  "id": "memory-swap-018",
+  "input_log": "2026-03-30 20:18:09 WARN host memory available dropped below 3 percent\n2026-03-30 20:18:10 WARN swap activity sustained above 85 percent\n2026-03-30 20:18:12 INFO background compaction started",
+  "expected_incident_type": "memory",
+  "expected_severity": "medium",
+  "expected_root_cause_keywords": [
+    "memory",
+    "swap",
+    "pressure"
+  ]
+}
