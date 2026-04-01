@@ -1,0 +1,3 @@
+2026-03-30 11:03:44 INFO dns lookup succeeded for redis.internal
+2026-03-30 11:03:45 INFO outbound connection established to redis.internal
+2026-03-30 11:03:46 INFO packet loss under 1 percent on core-switch-a

@@ -1,0 +1,4 @@
+2026-03-31 15:06:11 ERROR segmentation fault detected in report-worker
+2026-03-31 15:06:12 WARN container report-worker restarted by orchestrator
+2026-03-31 15:06:13 ERROR health check failed with HTTP 502 on report-worker
+2026-03-31 15:06:14 WARN circuit breaker opened for report-worker upstream

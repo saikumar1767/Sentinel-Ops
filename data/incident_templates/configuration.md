@@ -1,0 +1,4 @@
+- Compare current runtime configuration against the last known good deployment.
+- Validate required environment variables, secrets, and feature flags.
+- Confirm config values are loaded in the expected environment and region.
+- Roll back or patch only the missing or incorrect settings, then re-test startup.

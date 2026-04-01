@@ -1,0 +1,4 @@
+- Confirm the affected endpoint, upstream provider, and customer impact window.
+- Check recent rate-limit changes, auth token rotation, and API contract changes.
+- Compare failing requests against a last known good response or trace.
+- Validate retry and backoff settings before restoring normal traffic.

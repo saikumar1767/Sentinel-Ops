@@ -1,0 +1,4 @@
+2026-03-31 02:14:01 WARN login failed for user ops-admin@example.com from 10.0.4.12
+2026-03-31 02:14:02 ERROR identity provider token exchange failed with invalid_client
+2026-03-31 02:14:03 WARN account lockout threshold reached for tenant finance-prod
+2026-03-31 02:14:04 ERROR refresh token validation failed after secret rotation

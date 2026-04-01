@@ -1,0 +1,4 @@
+- Identify whether the failure is DNS, packet loss, routing, or connection refusal.
+- Compare the current path against a recent healthy connection attempt.
+- Check upstream dependencies, firewall rules, and recent network changes.
+- Restore connectivity first, then validate retry behavior and downstream recovery.

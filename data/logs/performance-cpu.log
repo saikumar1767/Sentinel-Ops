@@ -1,0 +1,4 @@
+2026-03-31 16:01:00 WARN cpu usage sustained above 92 percent on api-03
+2026-03-31 16:01:04 WARN request latency p95 increased to 1800ms
+2026-03-31 16:01:07 ERROR background report job exceeded 4 minute runtime budget
+2026-03-31 16:01:11 WARN throughput dropped 38 percent versus previous hour

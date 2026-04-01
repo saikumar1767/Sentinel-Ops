@@ -1,0 +1,4 @@
+- Confirm database reachability, connection pool health, and active saturation symptoms.
+- Check for recent schema changes, failovers, or long-running queries.
+- Compare timeouts, deadlocks, and pool exhaustion against prior healthy runs.
+- Mitigate by reducing pressure, restarting stuck workers only if safe, and validating recovery.
