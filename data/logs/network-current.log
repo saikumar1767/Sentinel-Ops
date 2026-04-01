@@ -1,0 +1,4 @@
+2026-03-31 11:03:44 ERROR dns lookup failed for redis.internal
+2026-03-31 11:03:45 WARN retrying outbound connection to redis.internal after timeout
+2026-03-31 11:03:46 ERROR upstream socket connect failed with connection refused
+2026-03-31 11:03:47 WARN packet loss detected above 15 percent on core-switch-a

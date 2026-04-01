@@ -1,0 +1,4 @@
+- Confirm which service, dependency, or resource is causing the slowdown.
+- Check CPU saturation, queue depth, and recent deploys during the impact window.
+- Compare latency and throughput against the last healthy baseline.
+- Reduce load or revert the triggering change before tuning deeper.

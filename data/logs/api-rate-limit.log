@@ -1,0 +1,4 @@
+2026-03-31 08:00:01 WARN upstream payments API returned HTTP 429 for POST /charges
+2026-03-31 08:00:03 ERROR retry budget exhausted after repeated rate-limit responses
+2026-03-31 08:00:05 WARN client backoff capped at 30 seconds during checkout retries
+2026-03-31 08:00:08 ERROR charge creation failed because upstream quota window remained closed

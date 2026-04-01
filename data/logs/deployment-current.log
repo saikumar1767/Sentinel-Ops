@@ -1,0 +1,4 @@
+2026-03-31 18:45:01 INFO rollout started for payments-api build 2026.03.31.4
+2026-03-31 18:45:09 ERROR readiness probe failed with connection refused on port 8080
+2026-03-31 18:45:14 ERROR missing required environment variable STRIPE_SIGNING_SECRET
+2026-03-31 18:45:17 WARN deployment controller paused rollout after consecutive failures

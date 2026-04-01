@@ -1,0 +1,4 @@
+2026-03-31 09:10:22 ERROR database connection timeout after 30 seconds
+2026-03-31 09:10:23 WARN retrying connection attempt 1 of 3
+2026-03-31 09:10:24 ERROR connection pool exhausted on primary-postgres
+2026-03-31 09:10:26 ERROR checkout request stalled waiting for free database connection

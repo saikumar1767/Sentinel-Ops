@@ -1,0 +1,4 @@
+2026-03-31 13:20:01 WARN queue depth exceeded 42000 messages on billing-events
+2026-03-31 13:20:03 ERROR consumer lag climbed above 18 minutes for billing-events
+2026-03-31 13:20:05 WARN downstream postgres timeout slowed ack throughput
+2026-03-31 13:20:07 ERROR sla breach predicted within 5 minutes

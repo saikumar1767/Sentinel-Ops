@@ -1,0 +1,4 @@
+- Confirm which mount or volume is full and whether writes are failing.
+- Check recent log growth, backup jobs, and temporary file spikes.
+- Free space safely by pruning known safe artifacts before deleting anything critical.
+- Verify disk headroom and restart impacted workloads only after capacity is restored.
