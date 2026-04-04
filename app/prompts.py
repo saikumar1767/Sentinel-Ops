@@ -5,8 +5,14 @@ import json
 from app.schemas import InvestigateRequest
 
 
-def build_analyze_messages(log_text: str, schema: dict[str, object]) -> list[dict[str, str]]:
+def build_analyze_messages(
+    log_text: str,
+    schema: dict[str, object],
+    retrieved_evidence_summary: str,
+    source_citations: list[str],
+) -> list[dict[str, str]]:
     schema_text = json.dumps(schema, indent=2)
+    citation_block = "\n".join(f"- {item}" for item in source_citations) or "- None"
     return [
         {
             "role": "system",
@@ -21,12 +27,14 @@ Return JSON only.
 Use exactly this schema:
 {schema_text}
 
-Return exactly these six fields and no others:
+Return exactly these eight fields and no others:
 incident_type
 severity
 summary
 suspected_root_cause
 recommended_action
+retrieved_evidence
+source_citations
 confidence
 
 Choose incident_type from:
@@ -76,11 +84,27 @@ Severity rubric:
 - medium = degraded performance, queue lag, packet loss, or rate limiting with partial impact
 - low = limited warning with minor user impact
 
+Output quality rules:
+- summary must describe the main incident pattern, not only the first log line.
+- If the log shows more than one concrete failure signal, reflect the main combined failure mode in summary.
+- summary should stay observational. Do not speculate about root cause, DNS, reachability, or other hidden causes unless the log explicitly says so.
+- retrieved_evidence must contain plain evidence snippets only. Do not include bullets, file paths, or citation prefixes inside the snippet text.
+
 Use concrete words from the log when you describe the suspected_root_cause.
+- Use critical only for confirmed severe impact such as active security compromise, confirmed data loss, or a clearly total outage. Repeated database timeouts, retries, and pool exhaustion are usually high unless the log explicitly proves total outage.
 Set confidence to a numeric value between 0.0 and 1.0.
+
+If retrieved knowledge evidence is relevant, include short snippets in retrieved_evidence and cite the supporting sources in source_citations.
+Do not invent citations that are not present in the allowed citations list.
 
 Use this log text:
 {log_text}
+
+Retrieved supporting evidence:
+{retrieved_evidence_summary}
+
+Allowed citations:
+{citation_block}
 """.strip(),
         },
     ]
@@ -100,7 +124,8 @@ def build_investigation_planner_messages(
         {
             "role": "system",
             "content": """
-You are SentinelOps v2 running a controlled tool-using workflow.
+You are SentinelOps v3 running a controlled tool-using workflow.
+You may also use retrieved local knowledge that the system gathers outside the tool loop.
 
 Rules:
 - Use only the available local tools.
@@ -141,6 +166,7 @@ Use more tools only to fill evidence gaps. You may also load a matching incident
 def build_investigation_final_messages(
     request: InvestigateRequest,
     evidence_summary: str,
+    retrieved_evidence_summary: str,
     schema: dict[str, object],
     evidence_citations: list[str],
 ) -> list[dict[str, str]]:
@@ -169,7 +195,8 @@ Field guidance:
 - suspected_root_cause: keep it specific and evidence-based.
 - next_steps: 2 to 5 short concrete actions.
 - manager_summary: 1 short paragraph for a non-technical manager.
-- evidence_used: cite the exact tool/path identifiers from the allowed evidence citations list when possible.
+- retrieved_evidence: include 2 to 5 short supporting snippets from the retrieved knowledge base when relevant.
+- source_citations: cite the exact tool/path identifiers from the allowed evidence citations list when possible.
 - confidence: numeric value from 0.0 to 1.0.
 
 Grounding rules:
@@ -177,12 +204,19 @@ Grounding rules:
 - Do not claim missing evidence when the summary below contains real log lines.
 - Do not rely only on templates if log evidence is available.
 - If the evidence is thin or conflicting, say so and lower confidence.
+- Use critical only for confirmed severe impact such as active security compromise, confirmed data loss, or a clearly total outage. Repeated database timeouts, saturation, regressions, and pool exhaustion are usually high unless the evidence explicitly proves complete outage.
+- manager_summary should summarize the current failing run in plain language, and if compare evidence exists it should mention that the previous run was healthy.
+- retrieved_evidence must contain plain evidence snippets only. Do not include bullets, file paths, or citation prefixes inside the snippet text.
+- source_citations should stay compact and relevant to the actual report. Do not dump every possible citation.
 
 Original request:
 {request.prompt}
 
 Collected evidence:
 {evidence_summary}
+
+Retrieved knowledge evidence:
+{retrieved_evidence_summary}
 
 Allowed evidence citations:
 {citation_block}

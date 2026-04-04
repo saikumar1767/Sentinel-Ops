@@ -3,3 +3,5 @@
 __pycache__/
 *.py[cod]
 .env
+data/chroma/
+data/knowledge_index.json

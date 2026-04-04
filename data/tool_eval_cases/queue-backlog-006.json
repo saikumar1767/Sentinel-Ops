@@ -1,4 +1,4 @@
-{
+﻿{
   "id": "queue-backlog-006",
   "prompt": "Investigate the billing queue backlog.",
   "candidate_log_paths": [
@@ -41,7 +41,8 @@
       "Monitor backlog drain and SLA recovery once consumers resume normal throughput."
     ],
     "manager_summary": "Billing processing is at risk because queue lag is increasing faster than workers can catch up.",
-    "evidence_used": [],
+    "retrieved_evidence": [],
+    "source_citations": [],
     "confidence": 0.88
   },
   "expected_tools": [
@@ -50,3 +51,5 @@
     "load_incident_template"
   ]
 }
+
+

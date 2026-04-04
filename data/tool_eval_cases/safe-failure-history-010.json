@@ -1,4 +1,4 @@
-{
+﻿{
   "id": "safe-failure-history-010",
   "prompt": "Investigate the report-worker issue even if the current log path is wrong.",
   "candidate_log_paths": [],
@@ -37,7 +37,8 @@
       "Use the service incident checklist and recent history to verify whether this is the same recurring fault."
     ],
     "manager_summary": "The current evidence is partial because one tool call was blocked safely, but history still indicates a likely service crash issue.",
-    "evidence_used": [],
+    "retrieved_evidence": [],
+    "source_citations": [],
     "confidence": 0.64
   },
   "expected_tools": [
@@ -46,3 +47,5 @@
     "load_incident_template"
   ]
 }
+
+

@@ -1,0 +1,13 @@
+{
+  "id": "memory-swap-search-006",
+  "query": "Host memory available dropped below 3 percent and swap activity is sustained above 85 percent.",
+  "top_k": 4,
+  "incident_type_hint": "memory",
+  "expected_citation_keywords": [
+    "memory-swap-note"
+  ],
+  "expected_snippet_keywords": [
+    "swap",
+    "memory pressure"
+  ]
+}

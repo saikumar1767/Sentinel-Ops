@@ -1,0 +1,15 @@
+{
+  "id": "database-timeout-search-003",
+  "query": "Checkout is failing after database connection timeout and connection pool exhausted on primary-postgres.",
+  "top_k": 4,
+  "incident_type_hint": "database",
+  "expected_citation_keywords": [
+    "database-timeout-runbook",
+    "db-pool-exhaustion-issue",
+    "payments-service-readme"
+  ],
+  "expected_snippet_keywords": [
+    "connection pool",
+    "timeout"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "deployment-readiness-search-004",
+  "query": "New pods failed readiness probe during rollout and the deployment paused.",
+  "top_k": 4,
+  "incident_type_hint": "deployment",
+  "expected_citation_keywords": [
+    "deployment-readiness-runbook"
+  ],
+  "expected_snippet_keywords": [
+    "readiness",
+    "rollout"
+  ]
+}

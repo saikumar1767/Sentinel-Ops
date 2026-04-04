@@ -1,0 +1,13 @@
+{
+  "id": "api-rate-limit-search-001",
+  "query": "Why did billing requests fail with HTTP 429 and partner API rate limit errors?",
+  "top_k": 4,
+  "incident_type_hint": "api",
+  "expected_citation_keywords": [
+    "api-rate-limit-issue"
+  ],
+  "expected_snippet_keywords": [
+    "429",
+    "rate limit"
+  ]
+}

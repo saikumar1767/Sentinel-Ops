@@ -31,6 +31,15 @@ class LLMGateway(Protocol):
     ) -> ChatTurn: ...
 
 
+class EmbeddingGateway(Protocol):
+    def embed(
+        self,
+        *,
+        model: str,
+        texts: Sequence[str],
+    ) -> list[list[float]]: ...
+
+
 class OllamaGateway:
     def __init__(self, settings: Settings):
         self._client = Client(
@@ -68,3 +77,16 @@ class OllamaGateway:
             message=message,
             tool_calls=tool_calls,
         )
+
+    def embed(
+        self,
+        *,
+        model: str,
+        texts: Sequence[str],
+    ) -> list[list[float]]:
+        response = self._client.embed(
+            model=model,
+            input=list(texts),
+            truncate=True,
+        )
+        return [list(vector) for vector in response.embeddings]

@@ -1,0 +1,14 @@
+{
+  "id": "network-dns-search-007",
+  "query": "Service startup failed because DNS lookup timed out and the app could not resolve api.internal.local.",
+  "top_k": 4,
+  "incident_type_hint": "network",
+  "expected_citation_keywords": [
+    "network-dns-runbook",
+    "dns-failover-regression-issue"
+  ],
+  "expected_snippet_keywords": [
+    "dns",
+    "resolve"
+  ]
+}

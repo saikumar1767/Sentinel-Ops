@@ -1,4 +1,4 @@
-{
+﻿{
   "id": "database-investigation-001",
   "prompt": "Investigate this incident.",
   "candidate_log_paths": [
@@ -34,7 +34,8 @@
       "Reduce application pressure or recycle stuck workers only after the database is responsive again."
     ],
     "manager_summary": "Payment traffic is degraded because the application cannot consistently obtain database connections.",
-    "evidence_used": [],
+    "retrieved_evidence": [],
+    "source_citations": [],
     "confidence": 0.89
   },
   "expected_tools": [
@@ -42,3 +43,5 @@
     "load_incident_template"
   ]
 }
+
+

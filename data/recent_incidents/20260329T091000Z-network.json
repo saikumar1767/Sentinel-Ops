@@ -9,9 +9,10 @@
   "severity": "high",
   "manager_summary": "Redis connectivity degraded after DNS failures and connection refusals appeared on the core path.",
   "suspected_root_cause": "DNS resolution and outbound connection establishment to redis.internal started failing on the current run.",
-  "evidence_used": [
+  "source_citations": [
     "compare_two_logs:data/logs/network-previous.log vs data/logs/network-current.log",
     "load_incident_template:network"
   ],
   "confidence": 0.84
 }
+

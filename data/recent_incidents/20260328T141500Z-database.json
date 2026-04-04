@@ -8,9 +8,10 @@
   "severity": "high",
   "manager_summary": "A connection pool exhaustion event caused repeated checkout failures in the payment stack.",
   "suspected_root_cause": "Database connection pool capacity was exhausted during elevated checkout demand.",
-  "evidence_used": [
+  "source_citations": [
     "read_log_file:data/logs/database-current.log",
     "load_incident_template:database"
   ],
   "confidence": 0.87
 }
+

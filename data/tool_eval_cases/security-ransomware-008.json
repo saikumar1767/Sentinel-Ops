@@ -1,4 +1,4 @@
-{
+﻿{
   "id": "security-ransomware-008",
   "prompt": "Investigate the finance workstation incident.",
   "candidate_log_paths": [
@@ -39,7 +39,8 @@
       "Validate containment, scope, and credential exposure through the incident-response workflow."
     ],
     "manager_summary": "This is a critical security event with active containment already underway.",
-    "evidence_used": [],
+    "retrieved_evidence": [],
+    "source_citations": [],
     "confidence": 0.96
   },
   "expected_tools": [
@@ -48,3 +49,5 @@
     "load_incident_template"
   ]
 }
+
+
