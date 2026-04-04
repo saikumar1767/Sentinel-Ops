@@ -43,7 +43,7 @@ class IncidentTools:
 
         incidents: list[SavedIncidentSummary] = []
         for path in sorted(incident_dir.glob("*.json"), reverse=True):
-            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
             incidents.append(SavedIncidentSummary.model_validate(payload))
 
         incidents.sort(key=lambda item: item.created_at, reverse=True)
@@ -83,7 +83,8 @@ class IncidentTools:
             severity=response.severity,
             manager_summary=response.manager_summary,
             suspected_root_cause=response.suspected_root_cause,
-            evidence_used=response.evidence_used,
+            source_citations=response.source_citations,
+            retrieval_status=response.retrieval_status,
             confidence=response.confidence,
         )
 

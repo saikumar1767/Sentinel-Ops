@@ -1,0 +1,13 @@
+{
+  "id": "security-certificate-search-009",
+  "query": "TLS handshake failed because the certificate expired on the edge gateway.",
+  "top_k": 4,
+  "incident_type_hint": "security",
+  "expected_citation_keywords": [
+    "security-certificate-runbook"
+  ],
+  "expected_snippet_keywords": [
+    "certificate",
+    "tls"
+  ]
+}

@@ -1,4 +1,4 @@
-{
+﻿{
   "id": "configuration-deployment-005",
   "prompt": "Investigate why the payments rollout failed.",
   "candidate_log_paths": [
@@ -43,7 +43,8 @@
       "Re-run readiness checks before resuming the rollout."
     ],
     "manager_summary": "This is primarily a configuration failure inside the rollout, not a generic deployment controller issue.",
-    "evidence_used": [],
+    "retrieved_evidence": [],
+    "source_citations": [],
     "confidence": 0.92
   },
   "expected_tools": [
@@ -52,3 +53,5 @@
     "load_incident_template"
   ]
 }
+
+

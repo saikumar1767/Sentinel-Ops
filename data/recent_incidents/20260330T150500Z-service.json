@@ -8,9 +8,10 @@
   "severity": "high",
   "manager_summary": "The report-worker entered a crash-and-restart loop that also triggered upstream circuit breaking.",
   "suspected_root_cause": "A segmentation fault in report-worker caused repeated restarts and health check failures.",
-  "evidence_used": [
+  "source_citations": [
     "read_log_file:data/logs/service-restarts.log",
     "load_incident_template:service"
   ],
   "confidence": 0.86
 }
+

@@ -8,9 +8,10 @@
   "severity": "high",
   "manager_summary": "Authentication failures escalated after an identity-provider client issue and account lockouts hit the finance tenant.",
   "suspected_root_cause": "Secret rotation left the identity provider client unable to validate refresh and exchange tokens correctly.",
-  "evidence_used": [
+  "source_citations": [
     "grep_error_pattern:data/logs/auth-failures.log",
     "load_incident_template:authentication"
   ],
   "confidence": 0.82
 }
+

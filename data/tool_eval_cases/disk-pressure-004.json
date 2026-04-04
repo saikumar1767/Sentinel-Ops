@@ -1,4 +1,4 @@
-{
+﻿{
   "id": "disk-pressure-004",
   "prompt": "Investigate the gateway write failures.",
   "candidate_log_paths": [
@@ -33,7 +33,8 @@
       "Confirm write queues drain once capacity is restored."
     ],
     "manager_summary": "Gateway write failures are caused by storage exhaustion on the impacted node.",
-    "evidence_used": [],
+    "retrieved_evidence": [],
+    "source_citations": [],
     "confidence": 0.9
   },
   "expected_tools": [
@@ -41,3 +42,5 @@
     "load_incident_template"
   ]
 }
+
+

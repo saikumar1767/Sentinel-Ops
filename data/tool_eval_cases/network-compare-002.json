@@ -1,4 +1,4 @@
-{
+﻿{
   "id": "network-compare-002",
   "prompt": "Investigate the redis connectivity incident.",
   "candidate_log_paths": [
@@ -35,7 +35,8 @@
       "Stabilize the network path before retrying dependent workloads."
     ],
     "manager_summary": "The outage is tied to a network-path regression rather than an application-only bug.",
-    "evidence_used": [],
+    "retrieved_evidence": [],
+    "source_citations": [],
     "confidence": 0.86
   },
   "expected_tools": [
@@ -43,3 +44,5 @@
     "load_incident_template"
   ]
 }
+
+

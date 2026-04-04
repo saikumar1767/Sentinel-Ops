@@ -1,4 +1,4 @@
-{
+﻿{
   "id": "performance-cpu-009",
   "prompt": "Investigate the API latency spike.",
   "candidate_log_paths": [
@@ -33,7 +33,8 @@
       "Check whether recent workload or release changes increased CPU demand."
     ],
     "manager_summary": "The service is degraded rather than fully down, with CPU pressure causing a measurable latency spike.",
-    "evidence_used": [],
+    "retrieved_evidence": [],
+    "source_citations": [],
     "confidence": 0.8
   },
   "expected_tools": [
@@ -41,3 +42,5 @@
     "load_incident_template"
   ]
 }
+
+

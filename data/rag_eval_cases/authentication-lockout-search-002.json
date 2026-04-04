@@ -1,0 +1,14 @@
+{
+  "id": "authentication-lockout-search-002",
+  "query": "Investigate repeated failed login attempts and rising account lock threshold alerts.",
+  "top_k": 4,
+  "incident_type_hint": "authentication",
+  "expected_citation_keywords": [
+    "auth-lockout-note",
+    "identity-service-readme"
+  ],
+  "expected_snippet_keywords": [
+    "failed login",
+    "lock"
+  ]
+}

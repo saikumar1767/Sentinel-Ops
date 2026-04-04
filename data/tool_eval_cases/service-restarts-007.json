@@ -1,4 +1,4 @@
-{
+﻿{
   "id": "service-restarts-007",
   "prompt": "Investigate the report-worker instability.",
   "candidate_log_paths": [
@@ -39,7 +39,8 @@
       "Roll back or isolate the faulty build if the crash signature is new."
     ],
     "manager_summary": "The worker outage is caused by an application crash loop, which is now affecting upstream availability.",
-    "evidence_used": [],
+    "retrieved_evidence": [],
+    "source_citations": [],
     "confidence": 0.9
   },
   "expected_tools": [
@@ -48,3 +49,5 @@
     "load_incident_template"
   ]
 }
+
+
