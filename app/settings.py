@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "SentinelOps"
-    app_version: str = "0.3.1"
+    app_version: str = "0.4.0"
     analyze_model: str = "llama3.2"
     investigate_model: str = "llama3.2"
     ollama_host: str = "http://localhost:11434"
@@ -32,7 +32,8 @@ class Settings(BaseSettings):
         ]
     )
     incident_templates_dir: Path = PROJECT_ROOT / "data" / "incident_templates"
-    incident_history_dir: Path = PROJECT_ROOT / "data" / "recent_incidents"
+    incident_history_dir: Path = PROJECT_ROOT / "data" / "runtime" / "recent_incidents"
+    workflow_checkpoint_path: Path = PROJECT_ROOT / "data" / "runtime" / "workflow" / "checkpoints.sqlite"
     knowledge_base_dir: Path = PROJECT_ROOT / "data" / "knowledge"
     chroma_path: Path = PROJECT_ROOT / "data" / "chroma"
     knowledge_index_path: Path = PROJECT_ROOT / "data" / "knowledge_index.json"
@@ -78,6 +79,7 @@ class Settings(BaseSettings):
     @field_validator(
         "incident_templates_dir",
         "incident_history_dir",
+        "workflow_checkpoint_path",
         "knowledge_base_dir",
         "chroma_path",
         "knowledge_index_path",
