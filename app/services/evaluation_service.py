@@ -12,9 +12,11 @@ from app.evaluation import (
     load_eval_cases,
     load_investigation_eval_cases,
     load_rag_eval_cases,
+    load_workflow_eval_cases,
     score_analysis_response,
     score_investigation_response,
     score_rag_search_results,
+    score_workflow_thread_response,
 )
 from app.ollama_client import ChatTurn, ToolCallSpec
 from app.rag.chunker import MarkdownChunker
@@ -29,9 +31,14 @@ from app.schemas import (
     InvestigateRequest,
     RagEvalSummary,
     RetrievalHit,
+    WorkflowApproveRequest,
+    WorkflowEvalSummary,
+    WorkflowInvestigateRequest,
+    WorkflowRejectRequest,
 )
 from app.services.analyze_service import AnalyzeService
 from app.services.investigation_service import InvestigationService
+from app.services.workflow_service import WorkflowService
 from app.settings import PROJECT_ROOT, Settings
 from app.tools.file_tools import FileTools
 from app.tools.incident_tools import IncidentTools
@@ -258,23 +265,26 @@ class EvaluationSummaryService:
         analyze_summary = self._run_analyze_eval()
         investigate_summary = self._run_investigation_eval()
         rag_summary = self._run_rag_eval()
+        workflow_summary = self._run_workflow_eval()
 
         total_cases = (
             analyze_summary.total_cases
             + investigate_summary.total_cases
             + rag_summary.total_cases
+            + workflow_summary.total_cases
         )
         passed_cases = (
             analyze_summary.passed_cases
             + investigate_summary.passed_cases
             + rag_summary.passed_cases
+            + workflow_summary.passed_cases
         )
         failed_cases = total_cases - passed_cases
 
         return EvalSummaryResponse(
             mode="deterministic_local",
             summary=(
-                "Deterministic local evaluation summary for SentinelOps service logic and retrieval quality."
+                "Deterministic local evaluation summary for SentinelOps service logic, retrieval quality, and workflow durability."
             ),
             generated_at=datetime.now(UTC),
             totals=EvalTotals(
@@ -286,6 +296,7 @@ class EvaluationSummaryService:
             analyze=analyze_summary,
             investigate=investigate_summary,
             rag=rag_summary,
+            workflow=workflow_summary,
         )
 
     def _run_analyze_eval(self) -> EvalScenarioSummary:
@@ -435,6 +446,92 @@ class EvaluationSummaryService:
             common_failure_reasons=dict(failure_reasons),
         )
 
+    def _run_workflow_eval(self) -> WorkflowEvalSummary:
+        cases = load_workflow_eval_cases()
+        passed = 0
+        failed = 0
+        failure_reasons: Counter[str] = Counter()
+        confidence_values: list[float] = []
+        confidence_by_incident_type: dict[str, list[float]] = defaultdict(list)
+        waiting_cases = 0
+        completed_cases = 0
+        approval_required_cases = 0
+        approved_completion_count = 0
+        rejected_completion_count = 0
+
+        with TemporaryDirectory(prefix="sentinelops-eval-workflow-") as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            for case in cases:
+                service = self._build_workflow_service(case, temp_dir / case.id)
+                try:
+                    response = service.start_investigation(
+                        WorkflowInvestigateRequest(
+                            thread_id=case.id,
+                            prompt=case.prompt,
+                            candidate_log_paths=case.candidate_log_paths,
+                            incident_type_hint=case.incident_type_hint,
+                            require_approval_for_remediation=case.require_approval_for_remediation,
+                        )
+                    )
+                    if case.post_start_action == "approve":
+                        response = service.approve(
+                            case.id,
+                            WorkflowApproveRequest(
+                                review_notes=case.review_notes,
+                            ),
+                        )
+                    elif case.post_start_action == "reject":
+                        response = service.reject(
+                            case.id,
+                            WorkflowRejectRequest(
+                                reason=case.review_notes or "Workflow eval rejection.",
+                                edited_remediation_plan=case.edited_remediation_plan,
+                            ),
+                        )
+
+                    payload = response.model_dump(mode="json")
+                    failures = score_workflow_thread_response(case, payload)
+                    if failures:
+                        failed += 1
+                        failure_reasons.update(failures)
+                    else:
+                        passed += 1
+
+                    if response.status == "waiting_for_approval":
+                        waiting_cases += 1
+                    if response.status == "completed":
+                        completed_cases += 1
+                    if response.approval_required:
+                        approval_required_cases += 1
+                    if response.approval_status == "approved":
+                        approved_completion_count += 1
+                    if response.approval_status == "rejected":
+                        rejected_completion_count += 1
+                    if response.confidence is not None:
+                        confidence_values.append(response.confidence)
+                    if response.incident_type is not None and response.confidence is not None:
+                        confidence_by_incident_type[response.incident_type].append(response.confidence)
+                finally:
+                    service.close()
+
+        return WorkflowEvalSummary(
+            total_cases=len(cases),
+            passed_cases=passed,
+            failed_cases=failed,
+            pass_rate=_rate(passed, len(cases)),
+            waiting_for_approval_rate=_rate(waiting_cases, len(cases)),
+            completed_rate=_rate(completed_cases, len(cases)),
+            approval_required_rate=_rate(approval_required_cases, len(cases)),
+            approved_completion_count=approved_completion_count,
+            rejected_completion_count=rejected_completion_count,
+            average_confidence=_average(confidence_values),
+            average_confidence_by_incident_type={
+                incident_type: round(sum(values) / len(values), 3)
+                for incident_type, values in sorted(confidence_by_incident_type.items())
+            },
+            common_failure_reasons=dict(failure_reasons),
+        )
+
     def _build_investigation_service(self, case, workdir: Path) -> InvestigationService:
         history_dir = workdir / "recent_incidents"
         shutil.copytree(PROJECT_ROOT / "data" / "recent_incidents", history_dir)
@@ -450,6 +547,28 @@ class EvaluationSummaryService:
             settings=settings,
         )
         return InvestigationService(
+            settings=settings,
+            gateway=ScriptedInvestigationGateway(case),
+            tool_registry=registry,
+            retriever=StubRetriever(),
+        )
+
+    def _build_workflow_service(self, case, workdir: Path) -> WorkflowService:
+        history_dir = workdir / "recent_incidents"
+        shutil.copytree(PROJECT_ROOT / "data" / "recent_incidents", history_dir)
+
+        settings = Settings(
+            allowed_log_roots=[PROJECT_ROOT / "samples", PROJECT_ROOT / "data" / "logs"],
+            incident_templates_dir=PROJECT_ROOT / "data" / "incident_templates",
+            incident_history_dir=history_dir,
+            workflow_checkpoint_path=workdir / "workflow" / "checkpoints.sqlite",
+        )
+        registry = ToolRegistry(
+            file_tools=FileTools(settings),
+            incident_tools=IncidentTools(settings),
+            settings=settings,
+        )
+        return WorkflowService(
             settings=settings,
             gateway=ScriptedInvestigationGateway(case),
             tool_registry=registry,

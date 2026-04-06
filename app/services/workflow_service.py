@@ -1,0 +1,381 @@
+from __future__ import annotations
+
+import json
+import re
+import sqlite3
+from typing import Any
+from uuid import uuid4
+
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.types import Command
+
+from app.log_utils import dedupe_preserve_order, looks_like_error
+from app.ollama_client import LLMGateway
+from app.rag.models import RetrievalService
+from app.schemas import (
+    WorkflowApproveRequest,
+    WorkflowInvestigateRequest,
+    WorkflowRejectRequest,
+    WorkflowResumeRequest,
+    WorkflowThreadResponse,
+)
+from app.settings import Settings
+from app.tools.tool_registry import ToolRegistry
+from app.workflows.nodes import SentinelWorkflowNodes
+from app.workflows.sentinel_graph import build_sentinel_workflow
+
+
+class WorkflowService:
+    def __init__(
+        self,
+        *,
+        settings: Settings,
+        gateway: LLMGateway,
+        tool_registry: ToolRegistry,
+        retriever: RetrievalService,
+    ) -> None:
+        self.settings = settings
+        self.settings.workflow_checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        self._connection = sqlite3.connect(
+            self.settings.workflow_checkpoint_path,
+            check_same_thread=False,
+        )
+        self._checkpointer = SqliteSaver(self._connection)
+        self._graph = build_sentinel_workflow(
+            nodes=SentinelWorkflowNodes(
+                settings=settings,
+                gateway=gateway,
+                tool_registry=tool_registry,
+                retriever=retriever,
+            ),
+            checkpointer=self._checkpointer,
+        )
+
+    def close(self) -> None:
+        self._connection.close()
+
+    def start_investigation(self, request: WorkflowInvestigateRequest) -> WorkflowThreadResponse:
+        thread_id = request.thread_id or f"workflow-{uuid4().hex}"
+        config = self._config(thread_id)
+        if self._thread_exists(thread_id):
+            raise ValueError(f"Workflow thread '{thread_id}' already exists.")
+
+        return self._invoke_workflow(
+            thread_id,
+            {
+                "request_id": uuid4().hex,
+                "prompt": request.prompt,
+                "candidate_log_paths": request.candidate_log_paths,
+                "incident_type_hint": request.incident_type_hint,
+                "require_approval_for_remediation": request.require_approval_for_remediation,
+                "status": "initialized",
+                "errors": [],
+            },
+        )
+
+    def get_thread(self, thread_id: str) -> WorkflowThreadResponse:
+        snapshot = self._graph.get_state(self._config(thread_id))
+        if not self._snapshot_exists(snapshot):
+            raise KeyError(f"Workflow thread '{thread_id}' was not found.")
+        return self._build_thread_response(thread_id, snapshot)
+
+    def resume(self, thread_id: str, request: WorkflowResumeRequest) -> WorkflowThreadResponse:
+        return self._resume_with_payload(
+            thread_id,
+            {
+                "decision": request.decision,
+                "review_notes": request.review_notes,
+                "edited_remediation_plan": request.edited_remediation_plan,
+            },
+        )
+
+    def approve(self, thread_id: str, request: WorkflowApproveRequest) -> WorkflowThreadResponse:
+        return self._resume_with_payload(
+            thread_id,
+            {
+                "decision": "approved",
+                "review_notes": request.review_notes,
+                "edited_remediation_plan": request.edited_remediation_plan,
+            },
+        )
+
+    def reject(self, thread_id: str, request: WorkflowRejectRequest) -> WorkflowThreadResponse:
+        return self._resume_with_payload(
+            thread_id,
+            {
+                "decision": "rejected",
+                "review_notes": request.reason,
+                "edited_remediation_plan": request.edited_remediation_plan,
+            },
+        )
+
+    def _resume_with_payload(self, thread_id: str, payload: dict[str, object]) -> WorkflowThreadResponse:
+        snapshot = self._graph.get_state(self._config(thread_id))
+        if not self._snapshot_exists(snapshot):
+            raise KeyError(f"Workflow thread '{thread_id}' was not found.")
+        snapshot_values = dict(snapshot.values or {})
+        if snapshot_values.get("status") == "failed":
+            raise RuntimeError(f"Workflow thread '{thread_id}' is in a failed state and cannot be resumed.")
+        if snapshot_values.get("status") == "completed":
+            raise RuntimeError(f"Workflow thread '{thread_id}' is already complete.")
+        if not snapshot.interrupts:
+            raise RuntimeError(f"Workflow thread '{thread_id}' is not waiting for external input.")
+
+        return self._invoke_workflow(thread_id, Command(resume=payload))
+
+    def _thread_exists(self, thread_id: str) -> bool:
+        snapshot = self._graph.get_state(self._config(thread_id))
+        return self._snapshot_exists(snapshot)
+
+    def _invoke_workflow(
+        self,
+        thread_id: str,
+        graph_input: dict[str, Any] | Command,
+    ) -> WorkflowThreadResponse:
+        config = self._config(thread_id)
+        try:
+            self._graph.invoke(graph_input, config)
+        except Exception as exc:
+            return self._mark_failed_thread(thread_id, exc)
+        return self.get_thread(thread_id)
+
+    def _mark_failed_thread(self, thread_id: str, exc: Exception) -> WorkflowThreadResponse:
+        config = self._config(thread_id)
+        snapshot = self._graph.get_state(config)
+        if not self._snapshot_exists(snapshot):
+            raise exc
+
+        failed_task = self._failed_task(snapshot)
+        existing_errors = list(dict(snapshot.values or {}).get("errors", []))
+        task_errors = [
+            self._normalize_error_message(task.error)
+            for task in snapshot.tasks
+            if getattr(task, "error", None)
+        ]
+        error_message = self._normalize_error_message(exc)
+        error_lines = dedupe_preserve_order(
+            [
+                *existing_errors,
+                *task_errors,
+                error_message,
+            ]
+        )
+        update_payload = {
+            "status": "failed",
+            "current_step": failed_task.name if failed_task is not None else self._current_step_from_snapshot(snapshot),
+            "errors": error_lines,
+            "approval_request": None,
+        }
+        self._graph.update_state(config, update_payload)
+        return self.get_thread(thread_id)
+
+    @staticmethod
+    def _snapshot_exists(snapshot) -> bool:
+        return bool(snapshot.created_at or snapshot.values)
+
+    @staticmethod
+    def _config(thread_id: str) -> dict[str, dict[str, str]]:
+        return {"configurable": {"thread_id": thread_id}}
+
+    @staticmethod
+    def _build_thread_response(thread_id: str, snapshot) -> WorkflowThreadResponse:
+        values = dict(snapshot.values or {})
+        configurable = dict((snapshot.config or {}).get("configurable", {}))
+        pending_interrupt = snapshot.interrupts[0].value if snapshot.interrupts else None
+        failed_task = WorkflowService._failed_task(snapshot)
+        current_step = (
+            failed_task.name
+            if failed_task is not None
+            else WorkflowService._current_step_from_snapshot(snapshot)
+        )
+        status = values.get("status", "running")
+        if failed_task is not None or status == "failed":
+            status = "failed"
+        elif snapshot.interrupts:
+            status = "waiting_for_approval"
+        elif not snapshot.next:
+            status = values.get("status", "completed")
+
+        tool_results = values.get("tool_results")
+        if not tool_results:
+            tool_results = [
+                *values.get("baseline_records", []),
+                *values.get("planner_records", []),
+                *values.get("support_records", []),
+            ]
+        tool_results = WorkflowService._dedupe_tool_results(tool_results)
+        retrieved_chunks = values.get("retrieved_chunks", [])
+        top_error_lines = values.get("top_error_lines") or WorkflowService._derive_top_error_lines(tool_results)
+        source_citations = values.get("source_citations") or WorkflowService._derive_source_citations(
+            tool_results=tool_results,
+            retrieved_chunks=retrieved_chunks,
+        )
+        retrieved_evidence = values.get("retrieved_evidence") or WorkflowService._derive_retrieved_evidence(
+            retrieved_chunks
+        )
+        errors = dedupe_preserve_order(
+            [
+                *values.get("errors", []),
+                *[
+                    WorkflowService._normalize_error_message(task.error)
+                    for task in snapshot.tasks
+                    if getattr(task, "error", None)
+                ],
+            ]
+        )
+        available_actions = ["approve", "reject", "resume"] if status == "waiting_for_approval" else []
+
+        return WorkflowThreadResponse(
+            thread_id=thread_id,
+            request_id=values.get("request_id", thread_id),
+            status=status,
+            current_stage=WorkflowService._stage_from_snapshot(status=status, current_step=current_step),
+            current_step=current_step,
+            available_actions=available_actions,
+            checkpoint_id=configurable.get("checkpoint_id"),
+            checkpoint_created_at=snapshot.created_at,
+            input_summary=values.get("input_summary"),
+            incident_type=values.get("incident_type"),
+            severity=values.get("severity"),
+            suspected_root_cause=values.get("suspected_root_cause"),
+            remediation_plan=values.get("remediation_plan", []),
+            top_error_lines=top_error_lines,
+            engineer_summary=values.get("engineer_summary"),
+            manager_summary=values.get("manager_summary"),
+            retrieved_evidence=retrieved_evidence,
+            source_citations=source_citations,
+            confidence=values.get("confidence"),
+            approval_required=values.get("approval_required", False),
+            approval_status=values.get("approval_status", "not_required"),
+            approval_reason=values.get("approval_reason"),
+            approval_notes=values.get("approval_notes"),
+            approval_request=(
+                pending_interrupt
+                if status == "waiting_for_approval" and isinstance(pending_interrupt, dict)
+                else None
+            ),
+            retrieval_status=values.get("retrieval_status", "not_used"),
+            tool_results=tool_results,
+            retrieved_chunks=retrieved_chunks,
+            final_report=values.get("final_report"),
+            errors=errors,
+        )
+
+    @staticmethod
+    def _failed_task(snapshot):
+        return next(
+            (
+                task
+                for task in snapshot.tasks
+                if getattr(task, "error", None)
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _current_step_from_snapshot(snapshot) -> str:
+        values = dict(snapshot.values or {})
+        if snapshot.next:
+            return snapshot.next[0]
+        return values.get("current_step", "completed")
+
+    @staticmethod
+    def _dedupe_tool_results(tool_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        deduped: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+
+        for item in tool_results:
+            name = str(item.get("name", "")).strip()
+            arguments = item.get("arguments", {})
+            key = (name, json.dumps(arguments, sort_keys=True))
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(item)
+
+        return deduped
+
+    @staticmethod
+    def _derive_top_error_lines(tool_results: list[dict[str, Any]]) -> list[str]:
+        candidates: list[str] = []
+        for item in tool_results:
+            payload = item.get("payload", {})
+            for key in ("selected_lines", "matched_lines", "new_error_lines"):
+                value = payload.get(key, [])
+                if not isinstance(value, list):
+                    continue
+                candidates.extend(
+                    str(line).strip()
+                    for line in value
+                    if isinstance(line, str) and looks_like_error(line)
+                )
+        return dedupe_preserve_order(candidates)[:5]
+
+    @staticmethod
+    def _derive_source_citations(
+        *,
+        tool_results: list[dict[str, Any]],
+        retrieved_chunks: list[dict[str, Any]],
+    ) -> list[str]:
+        citations: list[str] = []
+
+        for item in tool_results:
+            name = str(item.get("name", "")).strip()
+            payload = item.get("payload", {})
+            if name == "read_log_file" and payload.get("path"):
+                citations.append(f"{name}:{payload['path']}")
+            elif name == "compare_two_logs" and payload.get("path_a") and payload.get("path_b"):
+                citations.append(f"{name}:{payload['path_a']}->{payload['path_b']}")
+            elif name == "load_incident_template" and payload.get("incident_type"):
+                citations.append(f"{name}:{payload['incident_type']}")
+            elif not item.get("ok", True):
+                citations.append(f"{name}:safe_failure")
+
+        citations.extend(
+            str(chunk.get("citation", "")).strip()
+            for chunk in retrieved_chunks
+            if str(chunk.get("citation", "")).strip()
+        )
+        return dedupe_preserve_order(citations)[:8]
+
+    @staticmethod
+    def _derive_retrieved_evidence(retrieved_chunks: list[dict[str, Any]]) -> list[str]:
+        snippets = [
+            str(chunk.get("snippet", "")).strip()
+            for chunk in retrieved_chunks
+            if str(chunk.get("snippet", "")).strip()
+        ]
+        return dedupe_preserve_order(snippets)[:5]
+
+    @staticmethod
+    def _normalize_error_message(error: object) -> str:
+        if isinstance(error, BaseException):
+            message = str(error).strip() or error.__class__.__name__
+        else:
+            message = str(error).strip()
+
+        wrapped = re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(?:Error|Exception)\((['\"])(.*)\1\)", message)
+        if wrapped:
+            message = wrapped.group(2).strip()
+        return message
+
+    @staticmethod
+    def _stage_from_snapshot(*, status: str, current_step: str) -> str:
+        if status == "waiting_for_approval":
+            return "awaiting_approval"
+        if status == "completed":
+            return "completed"
+        if status == "failed":
+            return "failed"
+
+        step_to_stage = {
+            "intake_node": "intake",
+            "incident_classifier_node": "classify_incident",
+            "tool_evidence_node": "gather_evidence",
+            "retrieval_node": "retrieve_supporting_docs",
+            "hypothesis_node": "draft_hypothesis",
+            "remediation_node": "draft_remediation",
+            "approval_node": "awaiting_approval",
+            "final_report_node": "completed",
+        }
+        return step_to_stage.get(current_step, "intake")

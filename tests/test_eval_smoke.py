@@ -200,7 +200,7 @@ class StubRuntimeHealthService:
             alive=True,
             status="ok",
             summary="stub liveness summary",
-            app=HealthAppInfo(name="SentinelOps", version="0.3.1"),
+            app=HealthAppInfo(name="SentinelOps", version="0.4.0"),
         )
         self.readiness = ReadinessResponse(
             check_type="readiness",
@@ -221,7 +221,7 @@ class StubRuntimeHealthService:
                 else "degraded"
             ),
             summary="stub readiness summary",
-            app=HealthAppInfo(name="SentinelOps", version="0.3.1"),
+            app=HealthAppInfo(name="SentinelOps", version="0.4.0"),
             dependencies={
                 "ollama": HealthDependency(status=ollama_status, detail="stub"),
                 "knowledge_store": HealthDependency(status=knowledge_status, detail="stub"),

@@ -13,6 +13,7 @@ from app.services.analyze_service import AnalyzeService
 from app.services.evaluation_service import EvaluationSummaryService
 from app.services.investigation_service import InvestigationService
 from app.services.runtime_health_service import RuntimeHealthService
+from app.services.workflow_service import WorkflowService
 from app.settings import Settings
 from app.tools.file_tools import FileTools
 from app.tools.incident_tools import IncidentTools
@@ -83,3 +84,21 @@ def get_investigation_service(
         tool_registry=tool_registry,
         retriever=retriever,
     )
+
+
+def get_workflow_service(
+    settings: Settings = Depends(get_settings),
+    gateway: OllamaGateway = Depends(get_ollama_gateway),
+    tool_registry: ToolRegistry = Depends(get_tool_registry),
+    retriever: KnowledgeBaseService = Depends(get_knowledge_base_service),
+):
+    service = WorkflowService(
+        settings=settings,
+        gateway=gateway,
+        tool_registry=tool_registry,
+        retriever=retriever,
+    )
+    try:
+        yield service
+    finally:
+        service.close()

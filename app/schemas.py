@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -42,6 +42,20 @@ RuntimeStatus = Literal["ok", "degraded", "unavailable", "disabled"]
 RetrievalStatus = Literal["used", "not_used", "unavailable"]
 CheckType = Literal["liveness", "readiness"]
 RelevanceLabel = Literal["high", "medium", "low"]
+WorkflowStatus = Literal["initialized", "running", "waiting_for_approval", "completed", "failed"]
+ApprovalStatus = Literal["not_required", "pending", "approved", "rejected"]
+WorkflowStage = Literal[
+    "intake",
+    "classify_incident",
+    "gather_evidence",
+    "retrieve_supporting_docs",
+    "draft_hypothesis",
+    "draft_remediation",
+    "awaiting_approval",
+    "completed",
+    "failed",
+]
+WorkflowAction = Literal["approve", "reject", "resume"]
 DocumentType = Literal[
     "runbook",
     "readme",
@@ -231,6 +245,401 @@ class InvestigateResponse(InvestigateModelResponse):
     next_steps: list[str] = Field(min_length=1, max_length=5)
     source_citations: list[str] = Field(min_length=1, max_length=8)
     retrieval_status: RetrievalStatus = "not_used"
+
+
+class WorkflowInvestigateRequest(InvestigateRequest):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "prompt": "Investigate this incident using the failing run and the previous healthy run.",
+                    "candidate_log_paths": [
+                        "data/logs/database-current.log",
+                        "data/logs/database-previous.log",
+                    ],
+                    "incident_type_hint": "database",
+                    "require_approval_for_remediation": True,
+                }
+            ]
+        },
+    )
+
+    thread_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=120,
+        description="Optional caller-supplied workflow thread identifier. Omit to let SentinelOps create one.",
+    )
+    require_approval_for_remediation: bool = Field(
+        default=True,
+        description="When true, actionable remediation plans pause for approval before the workflow finalizes.",
+    )
+
+
+class WorkflowResumeRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "decision": "approved",
+                    "review_notes": "Approved for the on-call team to execute.",
+                    "edited_remediation_plan": [],
+                },
+                {
+                    "decision": "rejected",
+                    "review_notes": "Use a safer reviewed checklist before making runtime changes.",
+                    "edited_remediation_plan": [
+                        "Freeze deploys touching the checkout service until the database saturation is verified.",
+                        "Page the database owner and confirm a safe rollback or failover path before restarting workers.",
+                    ],
+                },
+            ]
+        },
+    )
+
+    decision: Literal["approved", "rejected"] = Field(
+        description="Human decision used to continue the paused workflow thread."
+    )
+    review_notes: str | None = Field(
+        default=None,
+        max_length=600,
+        description="Optional reviewer notes recorded in the completed workflow report.",
+    )
+    edited_remediation_plan: list[str] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Optional reviewed remediation steps. Leave empty to keep the generated checklist unchanged.",
+    )
+
+    @field_validator("edited_remediation_plan")
+    @classmethod
+    def clean_resume_plan(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)
+
+
+class WorkflowApproveRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "review_notes": "Approved for the on-call team to execute.",
+                    "edited_remediation_plan": [],
+                }
+            ]
+        },
+    )
+
+    review_notes: str | None = Field(
+        default=None,
+        max_length=600,
+        description="Optional reviewer notes recorded with the approval decision.",
+    )
+    edited_remediation_plan: list[str] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Optional reviewed remediation steps. Leave empty to approve the generated checklist as-is.",
+    )
+
+    @field_validator("edited_remediation_plan")
+    @classmethod
+    def clean_approved_plan(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)
+
+
+class WorkflowRejectRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "reason": "Use a safer reviewed checklist before making runtime changes.",
+                    "edited_remediation_plan": [
+                        "Freeze deploys touching the checkout service until the database saturation is verified.",
+                        "Page the database owner and confirm a safe rollback or failover path before restarting workers.",
+                    ],
+                }
+            ]
+        },
+    )
+
+    reason: str = Field(
+        min_length=1,
+        max_length=600,
+        description="Reviewer rationale for rejecting the generated remediation checklist.",
+    )
+    edited_remediation_plan: list[str] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Optional replacement remediation steps provided by the reviewer.",
+    )
+
+    @field_validator("edited_remediation_plan")
+    @classmethod
+    def clean_rejected_plan(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)
+
+
+class WorkflowApprovalRequestInfo(BaseModel):
+    type: Literal["approval_required"]
+    approval_reason: str | None = None
+    incident_type: IncidentType
+    severity: Severity
+    suspected_root_cause: str
+    manager_summary: str
+    proposed_remediation_plan: list[str] = Field(default_factory=list, max_length=8)
+    source_citations: list[str] = Field(default_factory=list, max_length=8)
+
+    @field_validator("proposed_remediation_plan", "source_citations")
+    @classmethod
+    def clean_approval_lists(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)
+
+
+class WorkflowToolResult(BaseModel):
+    name: str = Field(
+        description="Stable tool identifier executed while gathering workflow evidence."
+    )
+    arguments: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Normalized arguments passed to the tool.",
+    )
+    ok: bool = Field(
+        description="Whether the tool execution completed successfully."
+    )
+    cached: bool = Field(
+        default=False,
+        description="Whether the tool output was served from the workflow-local cache.",
+    )
+    payload: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Tool-specific structured result payload captured for inspection.",
+    )
+
+
+class WorkflowFinalReport(BaseModel):
+    incident_type: IncidentType
+    severity: Severity
+    top_error_lines: list[str] = Field(default_factory=list, max_length=5)
+    suspected_root_cause: str = Field(min_length=1)
+    remediation_plan: list[str] = Field(default_factory=list, max_length=5)
+    engineer_summary: str = Field(min_length=1)
+    manager_summary: str = Field(min_length=1)
+    retrieved_evidence: list[str] = Field(default_factory=list, max_length=5)
+    source_citations: list[str] = Field(default_factory=list, max_length=8)
+    retrieval_status: RetrievalStatus = "not_used"
+    approval_status: ApprovalStatus = "not_required"
+    approval_notes: str | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
+
+    @field_validator(
+        "top_error_lines",
+        "remediation_plan",
+        "retrieved_evidence",
+        "source_citations",
+    )
+    @classmethod
+    def clean_final_report_lists(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)
+
+
+class WorkflowThreadResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "thread_id": "workflow-7f1ac5f14f4d470ab8eb52885c32416a",
+                "request_id": "09f4059d5f2140f28ef2857d05166d45",
+                "status": "waiting_for_approval",
+                "current_stage": "awaiting_approval",
+                "current_step": "approval_node",
+                "available_actions": ["approve", "reject", "resume"],
+                "checkpoint_id": "1f130700-a35d-6f0c-8006-49d8f1e2aa61",
+                "checkpoint_created_at": "2026-04-04T00:00:00Z",
+                "input_summary": "Investigate this incident using the failing run and the previous healthy run. | candidate_logs=2",
+                "incident_type": "database",
+                "severity": "high",
+                "suspected_root_cause": "Connection pool exhaustion on primary-postgres is causing repeated database timeouts and stalled checkout requests.",
+                "remediation_plan": [
+                    "Confirm database reachability and server-side saturation on primary-postgres.",
+                    "Reduce caller concurrency or recycle unhealthy workers to relieve pool pressure.",
+                ],
+                "top_error_lines": [
+                    "1: 2026-03-31 09:10:22 ERROR database connection timeout after 30 seconds"
+                ],
+                "engineer_summary": None,
+                "manager_summary": "The current database run is failing due to connection timeouts and pool exhaustion, while the previous run was healthy.",
+                "retrieved_evidence": [
+                    "Database timeout incidents usually include connection pool exhaustion or long-running postgres transactions."
+                ],
+                "source_citations": [
+                    "read_log_file:data/logs/database-current.log",
+                    "data/knowledge/runbooks/database-timeout-runbook.md#Symptoms",
+                ],
+                "confidence": 0.92,
+                "approval_required": True,
+                "approval_status": "pending",
+                "approval_reason": "High-impact remediation should be reviewed before anyone executes the checklist.",
+                "approval_notes": None,
+                "approval_request": {
+                    "type": "approval_required",
+                    "approval_reason": "High-impact remediation should be reviewed before anyone executes the checklist.",
+                    "incident_type": "database",
+                    "severity": "high",
+                    "suspected_root_cause": "Connection pool exhaustion on primary-postgres is causing repeated database timeouts and stalled checkout requests.",
+                    "manager_summary": "The current database run is failing due to connection timeouts and pool exhaustion, while the previous run was healthy.",
+                    "proposed_remediation_plan": [
+                        "Confirm database reachability and server-side saturation on primary-postgres.",
+                        "Reduce caller concurrency or recycle unhealthy workers to relieve pool pressure.",
+                    ],
+                    "source_citations": [
+                        "read_log_file:data/logs/database-current.log",
+                        "data/knowledge/runbooks/database-timeout-runbook.md#Symptoms",
+                    ],
+                },
+                "retrieval_status": "used",
+                "tool_results": [
+                    {
+                        "name": "read_log_file",
+                        "arguments": {
+                            "path": "data/logs/database-current.log",
+                        },
+                        "ok": True,
+                        "cached": False,
+                        "payload": {
+                            "tool": "read_log_file",
+                            "ok": True,
+                            "path": "data/logs/database-current.log",
+                        },
+                    }
+                ],
+                "retrieved_chunks": [],
+                "final_report": None,
+                "errors": [],
+            }
+        }
+    )
+
+    thread_id: str = Field(
+        description="Stable workflow thread identifier returned when the investigation started."
+    )
+    request_id: str = Field(
+        description="Request identifier for the workflow run that created this thread."
+    )
+    status: WorkflowStatus = Field(
+        description="High-level lifecycle state of the workflow thread."
+    )
+    current_stage: WorkflowStage = Field(
+        description="Stable client-facing workflow stage for UI logic and orchestration state displays."
+    )
+    current_step: str = Field(
+        description="Internal workflow node name for debugging. Prefer current_stage for client behavior."
+    )
+    available_actions: list[WorkflowAction] = Field(
+        default_factory=list,
+        description="Client actions currently allowed for this thread.",
+    )
+    checkpoint_id: str | None = Field(
+        default=None,
+        description="Opaque identifier for the current persisted workflow checkpoint.",
+    )
+    checkpoint_created_at: datetime | None = Field(
+        default=None,
+        description="Timestamp of the current persisted workflow checkpoint.",
+    )
+    input_summary: str | None = Field(
+        default=None,
+        description="Short summary of the original investigation request.",
+    )
+    incident_type: IncidentType | None = None
+    severity: Severity | None = None
+    suspected_root_cause: str | None = None
+    remediation_plan: list[str] = Field(default_factory=list, max_length=5)
+    top_error_lines: list[str] = Field(default_factory=list, max_length=5)
+    engineer_summary: str | None = None
+    manager_summary: str | None = None
+    retrieved_evidence: list[str] = Field(default_factory=list, max_length=5)
+    source_citations: list[str] = Field(default_factory=list, max_length=8)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    approval_required: bool = False
+    approval_status: ApprovalStatus = "not_required"
+    approval_reason: str | None = None
+    approval_notes: str | None = None
+    approval_request: WorkflowApprovalRequestInfo | None = Field(
+        default=None,
+        description="Structured approval prompt shown when the workflow is paused for human review.",
+    )
+    retrieval_status: RetrievalStatus = "not_used"
+    tool_results: list[WorkflowToolResult] = Field(
+        default_factory=list,
+        description="Structured tool executions captured while gathering workflow evidence.",
+    )
+    retrieved_chunks: list[RetrievalHit] = Field(
+        default_factory=list,
+        description="Retrieved supporting knowledge chunks attached to the workflow state.",
+    )
+    final_report: WorkflowFinalReport | None = Field(
+        default=None,
+        description="Final workflow report returned when the thread completes.",
+    )
+    errors: list[str] = Field(
+        default_factory=list,
+        description="Accumulated workflow execution errors, if any.",
+    )
+
+    @field_validator(
+        "remediation_plan",
+        "top_error_lines",
+        "retrieved_evidence",
+        "source_citations",
+        "errors",
+    )
+    @classmethod
+    def clean_thread_lists(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)
+
+
+class ProblemDetailResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "type": "urn:sentinelops:problem:workflow-thread-not-found",
+                "title": "Workflow thread not found",
+                "status": 404,
+                "detail": "Workflow thread 'workflow-missing' was not found.",
+                "instance": "/workflow/workflow-missing",
+                "code": "workflow_thread_not_found",
+                "thread_id": "workflow-missing",
+            }
+        }
+    )
+
+    type: str = Field(
+        description="URI that identifies the problem type.",
+    )
+    title: str = Field(
+        description="Short, human-readable summary of the problem."
+    )
+    status: int = Field(
+        ge=400,
+        le=599,
+        description="HTTP status code associated with the problem.",
+    )
+    detail: str = Field(
+        description="Human-readable explanation specific to this occurrence of the problem."
+    )
+    instance: str | None = Field(
+        default=None,
+        description="Request path for the failing operation.",
+    )
+    code: str = Field(
+        description="Stable machine-readable application error code."
+    )
+    thread_id: str | None = Field(
+        default=None,
+        description="Workflow thread identifier when the problem is associated with a specific thread.",
+    )
 
 
 class SavedIncidentSummary(BaseModel):
@@ -457,7 +866,7 @@ class LivenessResponse(BaseModel):
                 "summary": "API process is alive.",
                 "app": {
                     "name": "SentinelOps",
-                    "version": "0.3.1",
+                    "version": "0.4.0",
                 },
             }
         }
@@ -479,7 +888,7 @@ class ReadinessResponse(BaseModel):
                 "summary": "One or more configured capabilities are not ready to serve traffic.",
                 "app": {
                     "name": "SentinelOps",
-                    "version": "0.3.1",
+                    "version": "0.4.0",
                 },
                 "dependencies": {
                     "ollama": {
@@ -565,6 +974,21 @@ class RagEvalSummary(BaseModel):
     common_failure_reasons: dict[str, int] = Field(default_factory=dict)
 
 
+class WorkflowEvalSummary(BaseModel):
+    total_cases: int = Field(ge=0)
+    passed_cases: int = Field(ge=0)
+    failed_cases: int = Field(ge=0)
+    pass_rate: float = Field(ge=0.0, le=1.0)
+    waiting_for_approval_rate: float = Field(ge=0.0, le=1.0)
+    completed_rate: float = Field(ge=0.0, le=1.0)
+    approval_required_rate: float = Field(ge=0.0, le=1.0)
+    approved_completion_count: int = Field(ge=0)
+    rejected_completion_count: int = Field(ge=0)
+    average_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    average_confidence_by_incident_type: dict[str, float] = Field(default_factory=dict)
+    common_failure_reasons: dict[str, int] = Field(default_factory=dict)
+
+
 class EvalTotals(BaseModel):
     total_cases: int = Field(ge=0)
     passed_cases: int = Field(ge=0)
@@ -577,11 +1001,11 @@ class EvalSummaryResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "mode": "deterministic_local",
-                "summary": "Deterministic local evaluation summary for SentinelOps service logic and retrieval quality.",
+                "summary": "Deterministic local evaluation summary for SentinelOps service logic, retrieval quality, and workflow durability.",
                 "generated_at": "2026-04-04T00:00:00Z",
                 "totals": {
-                    "total_cases": 38,
-                    "passed_cases": 38,
+                    "total_cases": 48,
+                    "passed_cases": 48,
                     "failed_cases": 0,
                     "overall_pass_rate": 1.0,
                 },
@@ -622,6 +1046,23 @@ class EvalSummaryResponse(BaseModel):
                     "corpus_chunk_count": 90,
                     "common_failure_reasons": {},
                 },
+                "workflow": {
+                    "total_cases": 10,
+                    "passed_cases": 10,
+                    "failed_cases": 0,
+                    "pass_rate": 1.0,
+                    "waiting_for_approval_rate": 0.2,
+                    "completed_rate": 0.8,
+                    "approval_required_rate": 0.8,
+                    "approved_completion_count": 4,
+                    "rejected_completion_count": 2,
+                    "average_confidence": 0.88,
+                    "average_confidence_by_incident_type": {
+                        "database": 0.92,
+                        "network": 0.86,
+                    },
+                    "common_failure_reasons": {},
+                },
             }
         }
     )
@@ -632,3 +1073,4 @@ class EvalSummaryResponse(BaseModel):
     analyze: EvalScenarioSummary
     investigate: EvalScenarioSummary
     rag: RagEvalSummary
+    workflow: WorkflowEvalSummary
