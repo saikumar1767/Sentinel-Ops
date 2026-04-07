@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - "codex/**"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test-and-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Sync dependencies
+        run: uv sync --dev
+
+      - name: Run unit and workflow tests
+        run: uv run pytest
+
+      - name: Build release image
+        run: docker build -t sentinelops-ci .
+
+      - name: Run container smoke test
+        run: |
+          docker run -d --name sentinelops-smoke -p 8000:8000 sentinelops-ci
+          for attempt in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8000/health >/tmp/sentinelops-health.json; then
+              cat /tmp/sentinelops-health.json
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs sentinelops-smoke
+          exit 1
+
+      - name: Clean up smoke container
+        if: always()
+        run: docker rm -f sentinelops-smoke || true

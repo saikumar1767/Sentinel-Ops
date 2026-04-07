@@ -1,0 +1,38 @@
+services:
+  sentinelops-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      SENTINELOPS_OLLAMA_HOST: ${SENTINELOPS_OLLAMA_HOST:-http://host.docker.internal:11434}
+      SENTINELOPS_CHROMA_HOST: ${SENTINELOPS_CHROMA_HOST:-host.docker.internal}
+      SENTINELOPS_CHROMA_PORT: ${SENTINELOPS_CHROMA_PORT:-8012}
+      SENTINELOPS_AUTH_MODE: ${SENTINELOPS_AUTH_MODE:-disabled}
+      SENTINELOPS_API_KEY: ${SENTINELOPS_API_KEY:-}
+      SENTINELOPS_BEARER_TOKENS: ${SENTINELOPS_BEARER_TOKENS:-{}}
+      SENTINELOPS_LOG_LEVEL: ${SENTINELOPS_LOG_LEVEL:-INFO}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data/runtime:/app/data/runtime
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

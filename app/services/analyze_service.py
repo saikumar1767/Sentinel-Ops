@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from time import perf_counter
 
 from app.confidence import AnalyzeConfidenceInputs, calibrate_analyze_confidence
 from app.log_utils import (
@@ -22,6 +23,7 @@ from app.rag.utils import (
 )
 from app.schemas import AnalyzeModelResponse, AnalyzeRequest, AnalyzeResponse, RetrievalHit, RetrievalStatus
 from app.settings import Settings
+from app.telemetry import set_span_attributes, start_span
 
 logger = logging.getLogger(__name__)
 SUMMARY_SPECULATION_MARKERS = (
@@ -257,63 +259,77 @@ class AnalyzeService:
         self.retriever = retriever
 
     def analyze(self, request: AnalyzeRequest) -> AnalyzeResponse:
-        schema = AnalyzeModelResponse.model_json_schema()
-        top_error_lines = extract_priority_lines(request.log_text)
-        retrieval_query = "\n".join(top_error_lines[:3])
-        incident_type_hint = guess_incident_type(request.log_text)
-        retrieval_hits, retrieval_status = self._retrieve_supporting_evidence(
-            query=retrieval_query or request.log_text[:800],
-            incident_type_hint=incident_type_hint,
-        )
-        messages = build_analyze_messages(
-            request.log_text,
-            schema,
-            format_retrieval_hits_for_prompt(retrieval_hits),
-            retrieval_citations(retrieval_hits),
-        )
-        response = self.gateway.chat(
-            model=self.settings.analyze_model,
-            messages=messages,
-            format=schema,
-        )
+        with start_span(
+            "analyze.request",
+            {
+                "analyze.log_chars": len(request.log_text),
+            },
+        ) as span:
+            schema = AnalyzeModelResponse.model_json_schema()
+            top_error_lines = extract_priority_lines(request.log_text)
+            retrieval_query = "\n".join(top_error_lines[:3])
+            incident_type_hint = guess_incident_type(request.log_text)
+            retrieval_hits, retrieval_status = self._retrieve_supporting_evidence(
+                query=retrieval_query or request.log_text[:800],
+                incident_type_hint=incident_type_hint,
+            )
+            messages = build_analyze_messages(
+                request.log_text,
+                schema,
+                format_retrieval_hits_for_prompt(retrieval_hits),
+                retrieval_citations(retrieval_hits),
+            )
+            response = self.gateway.chat(
+                model=self.settings.analyze_model,
+                messages=messages,
+                format=schema,
+            )
 
-        model_response = AnalyzeModelResponse.model_validate_json(
-            strip_json_fences(response.content)
-        )
-        response_payload = model_response.model_dump()
-        response_payload["summary"] = ground_summary(
-            model_response.summary,
-            model_response.incident_type,
-            top_error_lines,
-        )
-        response_payload["suspected_root_cause"] = ground_suspected_root_cause(
-            model_response.suspected_root_cause,
-            top_error_lines,
-        )
-        grounded_citations = self._ground_source_citations(
-            model_response.source_citations,
-            retrieval_hits,
-        )
-        response_payload["retrieved_evidence"] = self._ground_retrieved_evidence(
-            model_response.retrieved_evidence,
-            retrieval_hits,
-            grounded_citations,
-        )
-        response_payload["source_citations"] = grounded_citations
-        response_payload["confidence"] = self._calibrated_confidence(
-            model_response=model_response,
-            top_error_lines=top_error_lines,
-            retrieval_hits=retrieval_hits,
-            retrieval_status=retrieval_status,
-            retrieved_evidence=response_payload["retrieved_evidence"],
-            source_citations=grounded_citations,
-            heuristic_incident_type=incident_type_hint,
-        )
-        return AnalyzeResponse(
-            **response_payload,
-            top_error_lines=top_error_lines,
-            retrieval_status=retrieval_status,
-        )
+            model_response = AnalyzeModelResponse.model_validate_json(
+                strip_json_fences(response.content)
+            )
+            response_payload = model_response.model_dump()
+            response_payload["summary"] = ground_summary(
+                model_response.summary,
+                model_response.incident_type,
+                top_error_lines,
+            )
+            response_payload["suspected_root_cause"] = ground_suspected_root_cause(
+                model_response.suspected_root_cause,
+                top_error_lines,
+            )
+            grounded_citations = self._ground_source_citations(
+                model_response.source_citations,
+                retrieval_hits,
+            )
+            response_payload["retrieved_evidence"] = self._ground_retrieved_evidence(
+                model_response.retrieved_evidence,
+                retrieval_hits,
+                grounded_citations,
+            )
+            response_payload["source_citations"] = grounded_citations
+            response_payload["confidence"] = self._calibrated_confidence(
+                model_response=model_response,
+                top_error_lines=top_error_lines,
+                retrieval_hits=retrieval_hits,
+                retrieval_status=retrieval_status,
+                retrieved_evidence=response_payload["retrieved_evidence"],
+                source_citations=grounded_citations,
+                heuristic_incident_type=incident_type_hint,
+            )
+            set_span_attributes(
+                span,
+                {
+                    "analyze.incident_type": model_response.incident_type,
+                    "analyze.retrieval_status": retrieval_status,
+                    "analyze.retrieval_hits": len(retrieval_hits),
+                },
+            )
+            return AnalyzeResponse(
+                **response_payload,
+                top_error_lines=top_error_lines,
+                retrieval_status=retrieval_status,
+            )
 
     def _retrieve_supporting_evidence(
         self,
@@ -321,26 +337,51 @@ class AnalyzeService:
         query: str,
         incident_type_hint: str | None,
     ) -> tuple[list[RetrievalHit], RetrievalStatus]:
-        try:
-            hits = self.retriever.search(
-                query=query,
-                top_k=max(self.settings.retrieval_top_k * 2, 6),
-                document_types=ANALYZE_RETRIEVAL_DOCUMENT_TYPES,
-                incident_type_hint=incident_type_hint,
-            )
-        except Exception as exc:
-            logger.warning("analyze retrieval unavailable: %s", exc)
-            return [], "unavailable"
+        started = perf_counter()
+        with start_span(
+            "analyze.retrieval",
+            {
+                "analyze.query_chars": len(query),
+                "analyze.incident_type_hint": incident_type_hint,
+            },
+        ) as span:
+            try:
+                hits = self.retriever.search(
+                    query=query,
+                    top_k=max(self.settings.retrieval_top_k * 2, 6),
+                    document_types=ANALYZE_RETRIEVAL_DOCUMENT_TYPES,
+                    incident_type_hint=incident_type_hint,
+                )
+            except Exception as exc:
+                logger.warning("analyze retrieval unavailable: %s", exc)
+                set_span_attributes(span, {"analyze.retrieval_status": "unavailable"})
+                return [], "unavailable"
 
-        reranked_hits = sorted(
-            hits,
-            key=lambda hit: (
-                _retrieval_section_priority(hit),
-                -(hit.similarity_score or 0.0),
-                hit.citation,
-            ),
-        )[: self.settings.retrieval_top_k]
-        return reranked_hits, ("used" if reranked_hits else "not_used")
+            reranked_hits = sorted(
+                hits,
+                key=lambda hit: (
+                    _retrieval_section_priority(hit),
+                    -(hit.similarity_score or 0.0),
+                    hit.citation,
+                ),
+            )[: self.settings.retrieval_top_k]
+            duration_ms = (perf_counter() - started) * 1000
+            logger.info(
+                "analyze_retrieval incident_type_hint=%s cache_candidate_query_chars=%s hits=%s duration_ms=%.3f",
+                incident_type_hint,
+                len(query),
+                len(reranked_hits),
+                duration_ms,
+            )
+            set_span_attributes(
+                span,
+                {
+                    "analyze.retrieval_status": "used" if reranked_hits else "not_used",
+                    "analyze.retrieval_hits": len(reranked_hits),
+                    "analyze.retrieval_duration_ms": round(duration_ms, 3),
+                },
+            )
+            return reranked_hits, ("used" if reranked_hits else "not_used")
 
     @staticmethod
     def _ground_source_citations(

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import json
+import logging
 from itertools import islice
+from time import perf_counter
 
 from ollama import ResponseError
 
+from app.cache import ExpiringCache
 from app.log_utils import truncate_text
 from app.ollama_client import EmbeddingGateway
 from app.rag.chunker import MarkdownChunker
@@ -16,6 +20,9 @@ from app.schemas import (
     RetrievalHit,
 )
 from app.settings import Settings
+from app.telemetry import set_span_attributes, start_span
+
+logger = logging.getLogger(__name__)
 
 
 class OllamaEmbeddingProvider(EmbeddingProvider):
@@ -71,6 +78,12 @@ class KnowledgeBaseService(RetrievalService):
         self.loader = loader
         self.chunker = chunker
         self.store = store
+        metrics = getattr(getattr(embedding_provider, "gateway", None), "metrics", None)
+        self._search_cache = ExpiringCache(
+            name="knowledge_search",
+            max_entries=settings.retrieval_cache_max_entries,
+            metrics=metrics,
+        )
 
     @property
     def collection_name(self) -> str:
@@ -81,15 +94,35 @@ class KnowledgeBaseService(RetrievalService):
             self.rebuild_index(reset=True)
 
     def rebuild_index(self, *, reset: bool = True) -> KnowledgeIngestResponse:
-        documents = self.loader.load_documents()
-        chunks = []
-        for document in documents:
-            chunks.extend(self.chunker.chunk_document(document))
+        started = perf_counter()
+        with start_span("knowledge.rebuild", {"knowledge.reset": reset}) as span:
+            documents = self.loader.load_documents()
+            chunks = []
+            for document in documents:
+                chunks.extend(self.chunker.chunk_document(document))
 
-        embeddings = self.embedding_provider.embed_texts(
-            [chunk.embedding_text for chunk in chunks]
-        )
-        return self.store.rebuild(chunks=chunks, embeddings=embeddings, reset=reset)
+            embeddings = self.embedding_provider.embed_texts(
+                [chunk.embedding_text for chunk in chunks]
+            )
+            result = self.store.rebuild(chunks=chunks, embeddings=embeddings, reset=reset)
+            self._search_cache.clear()
+            duration_ms = (perf_counter() - started) * 1000
+            set_span_attributes(
+                span,
+                {
+                    "knowledge.document_count": len(documents),
+                    "knowledge.chunk_count": len(chunks),
+                    "knowledge.duration_ms": round(duration_ms, 3),
+                },
+            )
+            logger.info(
+                "knowledge_rebuild documents=%s chunks=%s reset=%s duration_ms=%.3f",
+                len(documents),
+                len(chunks),
+                reset,
+                duration_ms,
+            )
+            return result
 
     def search(
         self,
@@ -99,22 +132,93 @@ class KnowledgeBaseService(RetrievalService):
         document_types: list[DocumentType] | None = None,
         incident_type_hint: IncidentType | None = None,
     ) -> list[RetrievalHit]:
-        self.ensure_index()
-        if self.store.count() == 0:
-            return []
-        embedding = self.embedding_provider.embed_texts([query])[0]
-        hits = self.store.query(
-            query_embedding=embedding,
-            top_k=top_k,
-            document_types=document_types,
-            incident_type_hint=incident_type_hint,
-        )
-        return [
-            RetrievalHit(
-                **{
-                    **hit.model_dump(),
-                    "snippet": truncate_text(hit.snippet, self.settings.retrieval_snippet_chars),
-                }
+        started = perf_counter()
+        with start_span(
+            "knowledge.search",
+            {
+                "knowledge.query_chars": len(query),
+                "knowledge.top_k": top_k,
+                "knowledge.incident_type_hint": incident_type_hint,
+            },
+        ) as span:
+            self.ensure_index()
+            if self.store.count() == 0:
+                set_span_attributes(span, {"knowledge.result_count": 0, "knowledge.cache_hit": False})
+                return []
+            cache_key = self._cache_key(
+                query=query,
+                top_k=top_k,
+                document_types=document_types,
+                incident_type_hint=incident_type_hint,
             )
-            for hit in hits
-        ]
+            if self.settings.retrieval_cache_enabled:
+                cached_hits = self._search_cache.get(cache_key)
+                if cached_hits is not None:
+                    duration_ms = (perf_counter() - started) * 1000
+                    set_span_attributes(
+                        span,
+                        {
+                            "knowledge.result_count": len(cached_hits),
+                            "knowledge.cache_hit": True,
+                            "knowledge.duration_ms": round(duration_ms, 3),
+                        },
+                    )
+                    logger.info(
+                        "knowledge_search cache_hit=true top_k=%s incident_type_hint=%s duration_ms=%.3f",
+                        top_k,
+                        incident_type_hint,
+                        duration_ms,
+                    )
+                    return cached_hits
+
+            embedding = self.embedding_provider.embed_texts([query])[0]
+            hits = self.store.query(
+                query_embedding=embedding,
+                top_k=top_k,
+                document_types=document_types,
+                incident_type_hint=incident_type_hint,
+            )
+            result = [
+                RetrievalHit(
+                    **{
+                        **hit.model_dump(),
+                        "snippet": truncate_text(hit.snippet, self.settings.retrieval_snippet_chars),
+                    }
+                )
+                for hit in hits
+            ]
+            if self.settings.retrieval_cache_enabled:
+                self._search_cache.set(cache_key, result, self.settings.retrieval_cache_ttl_seconds)
+            duration_ms = (perf_counter() - started) * 1000
+            set_span_attributes(
+                span,
+                {
+                    "knowledge.result_count": len(result),
+                    "knowledge.cache_hit": False,
+                    "knowledge.duration_ms": round(duration_ms, 3),
+                },
+            )
+            logger.info(
+                "knowledge_search cache_hit=false top_k=%s incident_type_hint=%s results=%s duration_ms=%.3f",
+                top_k,
+                incident_type_hint,
+                len(result),
+                duration_ms,
+            )
+            return result
+
+    @staticmethod
+    def _cache_key(
+        *,
+        query: str,
+        top_k: int,
+        document_types: list[DocumentType] | None,
+        incident_type_hint: IncidentType | None,
+    ) -> str:
+        payload = {
+            "query": query,
+            "top_k": top_k,
+            "document_types": document_types or [],
+            "incident_type_hint": incident_type_hint,
+        }
+        return json.dumps(payload, sort_keys=True, separators=(",", ":"))

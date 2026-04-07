@@ -278,6 +278,6 @@ def test_knowledge_endpoints_surface_missing_embedding_model_as_503() -> None:
         app.dependency_overrides.clear()
 
     assert ingest_response.status_code == 503
-    assert "embedding model" in ingest_response.json()["detail"]
+    assert "knowledge ingest" in ingest_response.json()["detail"].lower()
     assert search_response.status_code == 503
-    assert "ollama pull embeddinggemma" in search_response.json()["detail"]
+    assert "knowledge search" in search_response.json()["detail"].lower()

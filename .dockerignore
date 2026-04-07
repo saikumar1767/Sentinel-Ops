@@ -1,0 +1,10 @@
+.git
+.gitignore
+.pytest_cache
+.venv
+__pycache__
+*.py[cod]
+data/chroma
+data/knowledge_index.json
+data/runtime
+tests

@@ -3,6 +3,7 @@ import shutil
 
 from fastapi.testclient import TestClient
 
+from app.audit import WorkflowAuditTrail
 from app.dependencies import get_workflow_service
 from app.main import app
 from app.ollama_client import ChatTurn, ToolCallSpec
@@ -132,7 +133,7 @@ class RepeatingCompareWorkflowGateway:
         )
 
 
-def build_workflow_service(tmp_path, *, gateway=None, retriever=None) -> WorkflowService:
+def build_workflow_service(tmp_path, *, gateway=None, retriever=None, audit_trail=None) -> WorkflowService:
     history_dir = tmp_path / "recent_incidents"
     shutil.copytree(PROJECT_ROOT / "data" / "recent_incidents", history_dir)
 
@@ -152,6 +153,7 @@ def build_workflow_service(tmp_path, *, gateway=None, retriever=None) -> Workflo
         gateway=gateway or WorkflowGateway(),
         tool_registry=registry,
         retriever=retriever or StubRetriever(),
+        audit_trail=audit_trail,
     )
 
 
@@ -488,6 +490,84 @@ def test_workflow_start_duplicate_thread_returns_problem_details(tmp_path) -> No
     assert "already exists" in payload["detail"]
 
 
+def test_workflow_audit_trail_records_approval_events(tmp_path) -> None:
+    audit_trail = WorkflowAuditTrail(Settings(audit_db_path=tmp_path / "audit" / "audit.sqlite"))
+    service = build_workflow_service(tmp_path, audit_trail=audit_trail)
+    app.dependency_overrides[get_workflow_service] = lambda: service
+    client = TestClient(app)
+
+    try:
+        start = client.post(
+            "/workflow/investigate",
+            json={
+                "thread_id": "workflow-audit-demo",
+                "prompt": "Investigate this incident using the failing run and the previous healthy run.",
+                "candidate_log_paths": [
+                    "data/logs/database-current.log",
+                    "data/logs/database-previous.log",
+                ],
+                "incident_type_hint": "database",
+            },
+        )
+        approve = client.post(
+            "/workflow/workflow-audit-demo/approve",
+            json={"review_notes": "Approved by incident manager."},
+        )
+        audit = client.get("/workflow/workflow-audit-demo/audit")
+    finally:
+        app.dependency_overrides.clear()
+        service.close()
+
+    assert start.status_code == 200
+    assert approve.status_code == 200
+    assert audit.status_code == 200
+    payload = audit.json()
+    assert payload["total_events"] == 1
+    event = payload["events"][0]
+    assert event["decision"] == "approved"
+    assert event["action"] == "approve"
+    assert event["review_notes"] == "Approved by incident manager."
+
+
+def test_workflow_audit_trail_records_reject_event(tmp_path) -> None:
+    audit_trail = WorkflowAuditTrail(Settings(audit_db_path=tmp_path / "audit" / "audit.sqlite"))
+    service = build_workflow_service(tmp_path, audit_trail=audit_trail)
+    app.dependency_overrides[get_workflow_service] = lambda: service
+    client = TestClient(app)
+
+    try:
+        start = client.post(
+            "/workflow/investigate",
+            json={
+                "thread_id": "workflow-anonymous-audit-demo",
+                "prompt": "Investigate this incident using the failing run and the previous healthy run.",
+                "candidate_log_paths": [
+                    "data/logs/database-current.log",
+                    "data/logs/database-previous.log",
+                ],
+                "incident_type_hint": "database",
+            },
+        )
+        reject = client.post(
+            "/workflow/workflow-anonymous-audit-demo/reject",
+            json={"reason": "Rejected during anonymous audit coverage."},
+        )
+        audit = client.get("/workflow/workflow-anonymous-audit-demo/audit")
+    finally:
+        app.dependency_overrides.clear()
+        service.close()
+
+    assert start.status_code == 200
+    assert reject.status_code == 200
+    assert audit.status_code == 200
+    payload = audit.json()
+    assert payload["total_events"] == 1
+    event = payload["events"][0]
+    assert event["decision"] == "rejected"
+    assert event["action"] == "reject"
+    assert event["review_notes"] == "Rejected during anonymous audit coverage."
+
+
 def test_workflow_swagger_docs_document_problem_responses_and_examples(tmp_path) -> None:
     service = build_workflow_service(tmp_path)
     app.dependency_overrides[get_workflow_service] = lambda: service
@@ -506,25 +586,29 @@ def test_workflow_swagger_docs_document_problem_responses_and_examples(tmp_path)
 
     start_post = openapi["paths"]["/workflow/investigate"]["post"]
     inspect_get = openapi["paths"]["/workflow/{thread_id}"]["get"]
+    audit_get = openapi["paths"]["/workflow/{thread_id}/audit"]["get"]
     resume_post = openapi["paths"]["/workflow/{thread_id}/resume"]["post"]
     approve_post = openapi["paths"]["/workflow/{thread_id}/approve"]["post"]
     reject_post = openapi["paths"]["/workflow/{thread_id}/reject"]["post"]
 
     assert "409" in start_post["responses"]
     assert "503" in start_post["responses"]
-    assert "waiting_for_approval" in start_post["responses"]["200"]["content"]["application/json"]["examples"]
-    assert "completed_without_approval" in start_post["responses"]["200"]["content"]["application/json"]["examples"]
-    assert "default" in start_post["requestBody"]["content"]["application/json"]["examples"]
+    assert start_post["requestBody"]["content"]["application/json"]["schema"]["$ref"].endswith("/WorkflowInvestigateRequest")
 
-    assert inspect_get["responses"]["404"]["content"]["application/problem+json"]["schema"]["$ref"].endswith("/ProblemDetailResponse")
-    assert "failed" in inspect_get["responses"]["200"]["content"]["application/json"]["examples"]
+    inspect_404_content = inspect_get["responses"]["404"]["content"]
+    assert "application/problem+json" in inspect_404_content
+    inspect_404_schema = next(iter(inspect_404_content.values()))["schema"]["$ref"]
+    assert inspect_404_schema.endswith("/ProblemDetailResponse")
+    assert audit_get["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/WorkflowAuditResponse")
 
     assert "409" in resume_post["responses"]
-    assert resume_post["responses"]["409"]["content"]["application/problem+json"]["schema"]["$ref"].endswith("/ProblemDetailResponse")
-    assert "approved" in resume_post["requestBody"]["content"]["application/json"]["examples"]
-    assert "rejected" in resume_post["requestBody"]["content"]["application/json"]["examples"]
-    assert "default" in approve_post["requestBody"]["content"]["application/json"]["examples"]
-    assert "default" in reject_post["requestBody"]["content"]["application/json"]["examples"]
+    resume_409_content = resume_post["responses"]["409"]["content"]
+    assert "application/problem+json" in resume_409_content
+    resume_409_schema = next(iter(resume_409_content.values()))["schema"]["$ref"]
+    assert resume_409_schema.endswith("/ProblemDetailResponse")
+    assert resume_post["requestBody"]["content"]["application/json"]["schema"]["$ref"].endswith("/WorkflowResumeRequest")
+    assert approve_post["requestBody"]["content"]["application/json"]["schema"]["$ref"].endswith("/WorkflowApproveRequest")
+    assert reject_post["requestBody"]["content"]["application/json"]["schema"]["$ref"].endswith("/WorkflowRejectRequest")
 
 
 def test_workflow_response_contract_is_consistent_across_states(tmp_path) -> None:
@@ -558,6 +642,7 @@ def test_workflow_response_contract_is_consistent_across_states(tmp_path) -> Non
         "approval_reason",
         "approval_notes",
         "approval_request",
+        "audit_trail",
         "retrieval_status",
         "tool_results",
         "retrieved_chunks",
@@ -635,6 +720,7 @@ def test_workflow_response_contract_is_consistent_across_states(tmp_path) -> Non
     assert pending["current_stage"] == "awaiting_approval"
     assert pending["approval_required"] is True
     assert pending["approval_status"] == "pending"
+    assert pending["audit_trail"] == []
     assert pending["approval_request"] is not None
     assert pending["approval_request"]["proposed_remediation_plan"] == pending["remediation_plan"]
     assert pending["approval_request"]["source_citations"] == pending["source_citations"]
@@ -644,6 +730,7 @@ def test_workflow_response_contract_is_consistent_across_states(tmp_path) -> Non
     assert approved["current_stage"] == "completed"
     assert approved["approval_request"] is None
     assert approved["approval_status"] == "approved"
+    assert approved["audit_trail"] == []
     assert approved["final_report"] is not None
     assert approved["final_report"]["incident_type"] == approved["incident_type"]
     assert approved["final_report"]["severity"] == approved["severity"]

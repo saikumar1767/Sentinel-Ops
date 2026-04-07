@@ -9,17 +9,20 @@ from uuid import uuid4
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
 
+from app.audit import WorkflowAuditTrail
 from app.log_utils import dedupe_preserve_order, looks_like_error
 from app.ollama_client import LLMGateway
 from app.rag.models import RetrievalService
 from app.schemas import (
     WorkflowApproveRequest,
+    WorkflowAuditResponse,
     WorkflowInvestigateRequest,
     WorkflowRejectRequest,
     WorkflowResumeRequest,
     WorkflowThreadResponse,
 )
 from app.settings import Settings
+from app.telemetry import start_span
 from app.tools.tool_registry import ToolRegistry
 from app.workflows.nodes import SentinelWorkflowNodes
 from app.workflows.sentinel_graph import build_sentinel_workflow
@@ -33,8 +36,10 @@ class WorkflowService:
         gateway: LLMGateway,
         tool_registry: ToolRegistry,
         retriever: RetrievalService,
+        audit_trail: WorkflowAuditTrail | None = None,
     ) -> None:
         self.settings = settings
+        self.audit_trail = audit_trail
         self.settings.workflow_checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(
             self.settings.workflow_checkpoint_path,
@@ -55,31 +60,38 @@ class WorkflowService:
         self._connection.close()
 
     def start_investigation(self, request: WorkflowInvestigateRequest) -> WorkflowThreadResponse:
-        thread_id = request.thread_id or f"workflow-{uuid4().hex}"
-        config = self._config(thread_id)
-        if self._thread_exists(thread_id):
-            raise ValueError(f"Workflow thread '{thread_id}' already exists.")
+        with start_span("workflow.start", {"workflow.has_thread_id": bool(request.thread_id)}):
+            thread_id = request.thread_id or f"workflow-{uuid4().hex}"
+            config = self._config(thread_id)
+            if self._thread_exists(thread_id):
+                raise ValueError(f"Workflow thread '{thread_id}' already exists.")
 
-        return self._invoke_workflow(
-            thread_id,
-            {
-                "request_id": uuid4().hex,
-                "prompt": request.prompt,
-                "candidate_log_paths": request.candidate_log_paths,
-                "incident_type_hint": request.incident_type_hint,
-                "require_approval_for_remediation": request.require_approval_for_remediation,
-                "status": "initialized",
-                "errors": [],
-            },
-        )
+            return self._invoke_workflow(
+                thread_id,
+                {
+                    "request_id": uuid4().hex,
+                    "prompt": request.prompt,
+                    "candidate_log_paths": request.candidate_log_paths,
+                    "incident_type_hint": request.incident_type_hint,
+                    "require_approval_for_remediation": request.require_approval_for_remediation,
+                    "status": "initialized",
+                    "errors": [],
+                    "audit_trail": [],
+                },
+            )
 
     def get_thread(self, thread_id: str) -> WorkflowThreadResponse:
-        snapshot = self._graph.get_state(self._config(thread_id))
-        if not self._snapshot_exists(snapshot):
-            raise KeyError(f"Workflow thread '{thread_id}' was not found.")
-        return self._build_thread_response(thread_id, snapshot)
+        with start_span("workflow.get_thread", {"workflow.thread_id": thread_id}):
+            snapshot = self._graph.get_state(self._config(thread_id))
+            if not self._snapshot_exists(snapshot):
+                raise KeyError(f"Workflow thread '{thread_id}' was not found.")
+            return self._build_thread_response(thread_id, snapshot, self._audit_events(thread_id))
 
-    def resume(self, thread_id: str, request: WorkflowResumeRequest) -> WorkflowThreadResponse:
+    def resume(
+        self,
+        thread_id: str,
+        request: WorkflowResumeRequest,
+    ) -> WorkflowThreadResponse:
         return self._resume_with_payload(
             thread_id,
             {
@@ -87,9 +99,14 @@ class WorkflowService:
                 "review_notes": request.review_notes,
                 "edited_remediation_plan": request.edited_remediation_plan,
             },
+            action="resume",
         )
 
-    def approve(self, thread_id: str, request: WorkflowApproveRequest) -> WorkflowThreadResponse:
+    def approve(
+        self,
+        thread_id: str,
+        request: WorkflowApproveRequest,
+    ) -> WorkflowThreadResponse:
         return self._resume_with_payload(
             thread_id,
             {
@@ -97,9 +114,14 @@ class WorkflowService:
                 "review_notes": request.review_notes,
                 "edited_remediation_plan": request.edited_remediation_plan,
             },
+            action="approve",
         )
 
-    def reject(self, thread_id: str, request: WorkflowRejectRequest) -> WorkflowThreadResponse:
+    def reject(
+        self,
+        thread_id: str,
+        request: WorkflowRejectRequest,
+    ) -> WorkflowThreadResponse:
         return self._resume_with_payload(
             thread_id,
             {
@@ -107,9 +129,23 @@ class WorkflowService:
                 "review_notes": request.reason,
                 "edited_remediation_plan": request.edited_remediation_plan,
             },
+            action="reject",
         )
 
-    def _resume_with_payload(self, thread_id: str, payload: dict[str, object]) -> WorkflowThreadResponse:
+    def audit_report(self, thread_id: str) -> WorkflowAuditResponse:
+        if not self._thread_exists(thread_id):
+            raise KeyError(f"Workflow thread '{thread_id}' was not found.")
+        if self.audit_trail is None:
+            return WorkflowAuditResponse(thread_id=thread_id, total_events=0, events=[])
+        return self.audit_trail.thread_audit(thread_id)
+
+    def _resume_with_payload(
+        self,
+        thread_id: str,
+        payload: dict[str, object],
+        *,
+        action: str,
+    ) -> WorkflowThreadResponse:
         snapshot = self._graph.get_state(self._config(thread_id))
         if not self._snapshot_exists(snapshot):
             raise KeyError(f"Workflow thread '{thread_id}' was not found.")
@@ -121,7 +157,15 @@ class WorkflowService:
         if not snapshot.interrupts:
             raise RuntimeError(f"Workflow thread '{thread_id}' is not waiting for external input.")
 
-        return self._invoke_workflow(thread_id, Command(resume=payload))
+        response = self._invoke_workflow(thread_id, Command(resume=payload))
+        self._record_audit_event(
+            thread_id=thread_id,
+            action=action,
+            payload=payload,
+            status_after=response.status,
+            request_id=response.request_id,
+        )
+        return response
 
     def _thread_exists(self, thread_id: str) -> bool:
         snapshot = self._graph.get_state(self._config(thread_id))
@@ -178,7 +222,7 @@ class WorkflowService:
         return {"configurable": {"thread_id": thread_id}}
 
     @staticmethod
-    def _build_thread_response(thread_id: str, snapshot) -> WorkflowThreadResponse:
+    def _build_thread_response(thread_id: str, snapshot, audit_trail: list[dict[str, Any]]) -> WorkflowThreadResponse:
         values = dict(snapshot.values or {})
         configurable = dict((snapshot.config or {}).get("configurable", {}))
         pending_interrupt = snapshot.interrupts[0].value if snapshot.interrupts else None
@@ -254,6 +298,7 @@ class WorkflowService:
                 if status == "waiting_for_approval" and isinstance(pending_interrupt, dict)
                 else None
             ),
+            audit_trail=audit_trail,
             retrieval_status=values.get("retrieval_status", "not_used"),
             tool_results=tool_results,
             retrieved_chunks=retrieved_chunks,
@@ -379,3 +424,40 @@ class WorkflowService:
             "final_report_node": "completed",
         }
         return step_to_stage.get(current_step, "intake")
+
+    def _record_audit_event(
+        self,
+        *,
+        thread_id: str,
+        action: str,
+        payload: dict[str, object],
+        status_after: str,
+        request_id: str | None,
+    ) -> None:
+        if self.audit_trail is None:
+            return
+        decision = str(payload.get("decision", "approved")).strip().lower() or "approved"
+        review_notes = str(payload.get("review_notes", "")).strip() or None
+        raw_plan = payload.get("edited_remediation_plan") or []
+        edited_plan = [
+            str(item).strip()
+            for item in raw_plan
+            if isinstance(raw_plan, list) and str(item).strip()
+        ]
+        self.audit_trail.record_event(
+            thread_id=thread_id,
+            action=action,
+            decision=decision,
+            review_notes=review_notes,
+            edited_remediation_plan=edited_plan,
+            status_after=status_after,
+            request_id=request_id,
+        )
+
+    def _audit_events(self, thread_id: str) -> list[dict[str, Any]]:
+        if self.audit_trail is None:
+            return []
+        return [
+            event.model_dump(mode="json")
+            for event in self.audit_trail.list_events(thread_id)
+        ]

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from time import perf_counter
 from typing import Any, Callable
 
 from pydantic import BaseModel, Field, ValidationError
@@ -15,6 +16,7 @@ from app.schemas import (
     ReadLogFileArgs,
 )
 from app.settings import Settings
+from app.telemetry import set_span_attributes, start_span
 from app.tools.file_tools import FileTools
 from app.tools.incident_tools import IncidentTools
 
@@ -24,6 +26,7 @@ class ToolExecutionRecord(BaseModel):
     arguments: dict[str, Any]
     ok: bool
     cached: bool = False
+    duration_ms: float | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -59,21 +62,38 @@ class ToolRegistry:
             )
 
         normalized_arguments = self._normalize_arguments(tool_name, arguments)
-        try:
-            raw_result = self._tools[tool_name](**normalized_arguments)
-            payload = json.loads(raw_result)
-        except TypeError as exc:
-            payload = {
-                "ok": False,
-                "tool": tool_name,
-                "error": f"Invalid tool arguments: {exc}",
-            }
-            raw_result = json.dumps(payload)
+        started = perf_counter()
+        with start_span(
+            "tool.execute",
+            {
+                "tool.name": tool_name,
+                "tool.argument_count": len(normalized_arguments),
+            },
+        ) as span:
+            try:
+                raw_result = self._tools[tool_name](**normalized_arguments)
+                payload = json.loads(raw_result)
+            except TypeError as exc:
+                payload = {
+                    "ok": False,
+                    "tool": tool_name,
+                    "error": f"Invalid tool arguments: {exc}",
+                }
+                raw_result = json.dumps(payload)
+            duration_ms = round((perf_counter() - started) * 1000, 3)
+            set_span_attributes(
+                span,
+                {
+                    "tool.ok": bool(payload.get("ok")),
+                    "tool.duration_ms": duration_ms,
+                },
+            )
 
         return raw_result, ToolExecutionRecord(
             name=tool_name,
             arguments=normalized_arguments,
             ok=bool(payload.get("ok")),
+            duration_ms=duration_ms,
             payload=payload,
         )
 
