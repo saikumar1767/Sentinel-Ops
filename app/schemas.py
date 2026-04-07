@@ -65,6 +65,14 @@ DocumentType = Literal[
     "troubleshooting_note",
 ]
 ApprovalAction = Literal["approve", "reject", "resume"]
+ConsoleIncidentCategory = Literal[
+    "workflow",
+    "investigation",
+    "analysis",
+    "approval",
+    "resilience",
+]
+ConsoleEndpoint = Literal["/analyze", "/investigate", "/workflow/investigate"]
 
 
 class AnalyzeRequest(BaseModel):
@@ -675,6 +683,47 @@ class WorkflowAuditResponse(BaseModel):
     events: list[WorkflowAuditEvent] = Field(default_factory=list)
 
 
+class IncidentExpectation(BaseModel):
+    incident_type: IncidentType | None = None
+    severity: Severity | None = None
+    retrieval_status: RetrievalStatus | None = None
+    workflow_status: WorkflowStatus | None = None
+    approval_status: ApprovalStatus | None = None
+    citation_keywords: list[str] = Field(default_factory=list, max_length=8)
+    evidence_keywords: list[str] = Field(default_factory=list, max_length=8)
+    notes: list[str] = Field(default_factory=list, max_length=8)
+
+    @field_validator("citation_keywords", "evidence_keywords", "notes")
+    @classmethod
+    def clean_incident_expectation_lists(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)
+
+
+class IncidentProfileResponse(BaseModel):
+    incident_id: str = Field(min_length=1, max_length=120)
+    recommended_order: int = Field(ge=1, le=20)
+    title: str = Field(min_length=1, max_length=120)
+    headline: str = Field(min_length=1, max_length=180)
+    category: ConsoleIncidentCategory
+    endpoint: ConsoleEndpoint
+    description: str = Field(min_length=1, max_length=800)
+    estimated_run_seconds: int = Field(ge=15, le=240)
+    artifact_paths: list[str] = Field(default_factory=list, max_length=6)
+    request_body: dict[str, Any] = Field(default_factory=dict)
+    expected_outcome: IncidentExpectation
+    operator_steps: list[str] = Field(default_factory=list, max_length=8)
+
+    @field_validator("artifact_paths", "operator_steps")
+    @classmethod
+    def clean_incident_profile_lists(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)
+
+
+class IncidentLibraryResponse(BaseModel):
+    incident_count: int = Field(ge=0)
+    incidents: list[IncidentProfileResponse] = Field(default_factory=list)
+
+
 class SavedIncidentSummary(BaseModel):
     created_at: datetime
     request: str
@@ -686,6 +735,70 @@ class SavedIncidentSummary(BaseModel):
     source_citations: list[str] = Field(default_factory=list)
     retrieval_status: RetrievalStatus = "not_used"
     confidence: float = Field(ge=0.0, le=1.0)
+
+
+class ConsoleTimelineEntry(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=180)
+    source: Literal["runtime", "reference"]
+    created_at: datetime
+    incident_type: IncidentType
+    severity: Severity
+    manager_summary: str
+    suspected_root_cause: str
+    retrieval_status: RetrievalStatus = "not_used"
+    confidence: float = Field(ge=0.0, le=1.0)
+    source_citations: list[str] = Field(default_factory=list, max_length=8)
+    candidate_log_paths: list[str] = Field(default_factory=list, max_length=6)
+
+    @field_validator("source_citations", "candidate_log_paths")
+    @classmethod
+    def clean_console_timeline_lists(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)
+
+
+class ConsoleTimelineResponse(BaseModel):
+    total_entries: int = Field(ge=0)
+    entries: list[ConsoleTimelineEntry] = Field(default_factory=list)
+
+
+class ConsoleOverviewResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "generated_at": "2026-04-07T00:00:00Z",
+                "launch_command": "powershell -ExecutionPolicy Bypass -File scripts/start_sentinelops.ps1",
+                "console_url": "http://127.0.0.1:8000/console",
+                "incident_count": 5,
+                "timeline_entry_count": 12,
+                "library_categories": [
+                    "workflow",
+                    "investigation",
+                    "approval",
+                    "resilience",
+                    "analysis",
+                ],
+                "eval_total_cases": 54,
+                "overall_pass_rate": 1.0,
+                "analyze_pass_rate": 1.0,
+                "investigate_pass_rate": 1.0,
+                "rag_pass_rate": 1.0,
+                "workflow_pass_rate": 1.0,
+            }
+        }
+    )
+
+    generated_at: datetime
+    launch_command: str
+    console_url: str
+    incident_count: int = Field(ge=0)
+    timeline_entry_count: int = Field(ge=0)
+    library_categories: list[ConsoleIncidentCategory] = Field(default_factory=list)
+    eval_total_cases: int = Field(ge=0)
+    overall_pass_rate: float = Field(ge=0.0, le=1.0)
+    analyze_pass_rate: float = Field(ge=0.0, le=1.0)
+    investigate_pass_rate: float = Field(ge=0.0, le=1.0)
+    rag_pass_rate: float = Field(ge=0.0, le=1.0)
+    workflow_pass_rate: float = Field(ge=0.0, le=1.0)
 
 
 class ReadLogFileArgs(BaseModel):
@@ -899,7 +1012,7 @@ class LivenessResponse(BaseModel):
                 "summary": "API process is alive.",
                 "app": {
                     "name": "SentinelOps",
-                    "version": "0.5.0",
+                    "version": "0.6.0",
                 },
             }
         }
@@ -924,7 +1037,7 @@ class ReadinessResponse(BaseModel):
                 "summary": "Core incident analysis traffic is ready, but one or more optional capabilities are degraded.",
                 "app": {
                     "name": "SentinelOps",
-                    "version": "0.5.0",
+                    "version": "0.6.0",
                 },
                 "dependencies": {
                     "ollama": {
@@ -1042,7 +1155,7 @@ class MetricsResponse(BaseModel):
                 "uptime_seconds": 132.441,
                 "app": {
                     "name": "SentinelOps",
-                    "version": "0.5.0",
+                    "version": "0.6.0",
                 },
                 "requests": {
                     "total_requests": 12,

@@ -1,0 +1,48 @@
+{
+  "incident_id": "service-resilience",
+  "recommended_order": 5,
+  "title": "Service Restart With Missing Log Path",
+  "headline": "Graceful handling when one evidence source is missing.",
+  "category": "resilience",
+  "endpoint": "/workflow/investigate",
+  "description": "Runs a workflow with one invalid log path and one valid service-restart log so the console can show that SentinelOps records safe tool failures without crashing the whole investigation.",
+  "estimated_run_seconds": 80,
+  "artifact_paths": [
+    "data/logs/missing-service.log",
+    "data/logs/service-restarts.log"
+  ],
+  "request_body": {
+    "thread_id": "ops-service-resilience",
+    "prompt": "Investigate the service restart incident and keep going even if one evidence file is missing.",
+    "candidate_log_paths": [
+      "data/logs/missing-service.log",
+      "data/logs/service-restarts.log"
+    ],
+    "incident_type_hint": "service",
+    "require_approval_for_remediation": false
+  },
+  "expected_outcome": {
+    "incident_type": "service",
+    "severity": "high",
+    "retrieval_status": "used",
+    "workflow_status": "completed",
+    "approval_status": "not_required",
+    "citation_keywords": [
+      "service-502-note",
+      "read_log_file"
+    ],
+    "evidence_keywords": [
+      "segmentation fault",
+      "circuit breaker"
+    ],
+    "notes": [
+      "Use the tool results panel to point out the safe failure instead of expecting it in top-level citations.",
+      "This incident is ideal for discussing resilience and graceful degradation."
+    ]
+  },
+  "operator_steps": [
+    "Run the workflow and inspect the tool results panel.",
+    "Point out that one log read failed safely while the workflow still completed.",
+    "Use the final report to explain fallback behavior under partial evidence."
+  ]
+}

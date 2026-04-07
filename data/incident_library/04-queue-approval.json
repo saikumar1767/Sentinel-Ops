@@ -1,0 +1,46 @@
+{
+  "incident_id": "queue-approval",
+  "recommended_order": 4,
+  "title": "Queue Backlog Approval Pause",
+  "headline": "Approval workflow for a downstream backlog incident.",
+  "category": "approval",
+  "endpoint": "/workflow/investigate",
+  "description": "Starts a queue backlog workflow that pauses for approval because the remediation plan is operationally sensitive, giving operators a second approval-focused incident profile.",
+  "estimated_run_seconds": 85,
+  "artifact_paths": [
+    "data/logs/queue-backlog.log"
+  ],
+  "request_body": {
+    "thread_id": "ops-queue-approval",
+    "prompt": "Investigate the billing queue backlog and propose a safe remediation checklist.",
+    "candidate_log_paths": [
+      "data/logs/queue-backlog.log"
+    ],
+    "incident_type_hint": "queue",
+    "require_approval_for_remediation": true
+  },
+  "expected_outcome": {
+    "incident_type": "queue",
+    "severity": "high",
+    "retrieval_status": "used",
+    "workflow_status": "waiting_for_approval",
+    "approval_status": "pending",
+    "citation_keywords": [
+      "queue-backlog-runbook",
+      "read_log_file"
+    ],
+    "evidence_keywords": [
+      "consumer lag",
+      "sla breach"
+    ],
+    "notes": [
+      "This profile shows that approval pauses are not hardcoded to one incident type.",
+      "It also creates a good conversation about safe mitigation under downstream load."
+    ]
+  },
+  "operator_steps": [
+    "Start the workflow and wait for the approval pause.",
+    "Review the evidence and recommended checklist.",
+    "Reject or approve it to compare workflow control paths."
+  ]
+}

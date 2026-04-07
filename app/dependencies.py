@@ -12,6 +12,7 @@ from app.rag.service import KnowledgeBaseService, OllamaEmbeddingProvider
 from app.rag.store_factory import build_knowledge_store
 from app.runtime_metrics import RuntimeMetrics
 from app.services.analyze_service import AnalyzeService
+from app.services.console_service import ConsoleService
 from app.services.evaluation_service import EvaluationSummaryService
 from app.services.investigation_service import InvestigationService
 from app.services.runtime_health_service import RuntimeHealthService
@@ -75,6 +76,13 @@ def get_evaluation_summary_service(
     settings: Settings = Depends(get_settings),
 ) -> EvaluationSummaryService:
     return EvaluationSummaryService(settings=settings)
+
+
+def get_console_service(
+    settings: Settings = Depends(get_settings),
+    evaluation_service: EvaluationSummaryService = Depends(get_evaluation_summary_service),
+) -> ConsoleService:
+    return ConsoleService(settings=settings, evaluation_service=evaluation_service)
 
 
 def get_analyze_service(
