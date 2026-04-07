@@ -40,18 +40,28 @@ class RuntimeHealthService:
             ),
         )
 
-    def readiness_report(self) -> ReadinessResponse:
+    def readiness_report(self, *, scope: str = "traffic") -> ReadinessResponse:
         dependencies, capabilities = self._build_snapshot()
-        ready = self._capabilities_ready(capabilities)
-        status = "ok" if ready else "degraded"
+        traffic_ready = self._traffic_ready(capabilities)
+        strict_ready = self._strict_ready(capabilities)
+        ready = strict_ready if scope == "strict" else traffic_ready
+        if traffic_ready and strict_ready:
+            status = "ok"
+        elif traffic_ready:
+            status = "degraded"
+        else:
+            status = "unavailable"
         return ReadinessResponse(
             check_type="readiness",
+            scope=scope,  # type: ignore[arg-type]
             ready=ready,
+            traffic_ready=traffic_ready,
+            strict_ready=strict_ready,
             status=status,
-            summary=(
-                "All configured capabilities are ready to serve traffic."
-                if ready
-                else "One or more configured capabilities are not ready to serve traffic."
+            summary=self._summary_for_scope(
+                scope=scope,
+                traffic_ready=traffic_ready,
+                strict_ready=strict_ready,
             ),
             app=HealthAppInfo(
                 name=self.settings.app_name,
@@ -76,9 +86,9 @@ class RuntimeHealthService:
         )
         return dependencies, capabilities
 
-    def is_ready(self, report: ReadinessResponse | None = None) -> bool:
-        report = report or self.readiness_report()
-        return report.ready
+    def is_ready(self, report: ReadinessResponse | None = None, *, strict: bool = False) -> bool:
+        report = report or self.readiness_report(scope="strict" if strict else "traffic")
+        return report.strict_ready if strict else report.traffic_ready
 
     def _inspect_ollama(self) -> OllamaInspection:
         endpoint = f"{self.settings.ollama_host.rstrip('/')}/api/tags"
@@ -139,7 +149,7 @@ class RuntimeHealthService:
         except (requests.RequestException, ValueError) as exc:
             dependency = HealthDependency(
                 status="unavailable",
-                detail=f"Ollama is not reachable: {exc}",
+                detail="Ollama is not reachable or did not return a valid model registry response.",
                 metadata={
                     "endpoint": endpoint,
                     "analyze_model": self.settings.analyze_model,
@@ -148,6 +158,7 @@ class RuntimeHealthService:
                     "analyze_model_ready": False,
                     "investigate_model_ready": False,
                     "embedding_model_ready": False,
+                    "error_type": exc.__class__.__name__,
                 },
             )
             return OllamaInspection(
@@ -279,7 +290,15 @@ class RuntimeHealthService:
         }
 
     @staticmethod
-    def _capabilities_ready(capabilities: dict[str, HealthDependency]) -> bool:
+    def _traffic_ready(capabilities: dict[str, HealthDependency]) -> bool:
+        required_capabilities = [
+            "analyze_endpoint",
+            "investigate_endpoint",
+        ]
+        return all(capabilities[name].status in {"ok", "degraded"} for name in required_capabilities)
+
+    @staticmethod
+    def _strict_ready(capabilities: dict[str, HealthDependency]) -> bool:
         required_capabilities = [
             "analyze_endpoint",
             "investigate_endpoint",
@@ -293,6 +312,11 @@ class RuntimeHealthService:
         ollama: OllamaInspection,
         knowledge_store: HealthDependency,
     ) -> HealthDependency:
+        if ollama.dependency.status == "unavailable":
+            return HealthDependency(
+                status="unavailable",
+                detail="Analyze is unavailable because Ollama is not reachable.",
+            )
         if not ollama.analyze_ready:
             return HealthDependency(
                 status="unavailable",
@@ -319,6 +343,11 @@ class RuntimeHealthService:
         ollama: OllamaInspection,
         knowledge_store: HealthDependency,
     ) -> HealthDependency:
+        if ollama.dependency.status == "unavailable":
+            return HealthDependency(
+                status="unavailable",
+                detail="Investigate is unavailable because Ollama is not reachable.",
+            )
         if not ollama.investigate_ready:
             return HealthDependency(
                 status="unavailable",
@@ -339,6 +368,21 @@ class RuntimeHealthService:
                 "will be missing."
             ),
         )
+
+    @staticmethod
+    def _summary_for_scope(
+        *,
+        scope: str,
+        traffic_ready: bool,
+        strict_ready: bool,
+    ) -> str:
+        if traffic_ready and strict_ready:
+            return "All configured SentinelOps capabilities are ready to serve traffic."
+        if traffic_ready:
+            if scope == "strict":
+                return "Core traffic is healthy, but one or more optional knowledge capabilities are not fully ready."
+            return "Core incident analysis traffic is ready, but one or more optional capabilities are degraded."
+        return "Core incident analysis traffic is unavailable because required model capabilities are not ready."
 
     @staticmethod
     def _extract_installed_models(models: list[dict[str, object]]) -> set[str]:

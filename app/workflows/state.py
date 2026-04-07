@@ -53,6 +53,7 @@ class SentinelWorkflowState(TypedDict, total=False):
     approval_reason: str | None
     approval_notes: str | None
     approval_request: dict[str, Any] | None
+    audit_trail: list[dict[str, Any]]
 
     final_report: dict[str, Any] | None
     errors: list[str]

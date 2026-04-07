@@ -4,6 +4,7 @@ import json
 import logging
 from dataclasses import dataclass
 import re
+from time import perf_counter
 
 from app.confidence import InvestigationConfidenceInputs, calibrate_investigation_confidence
 from app.log_utils import (
@@ -33,6 +34,7 @@ from app.schemas import (
     RetrievalStatus,
 )
 from app.settings import Settings
+from app.telemetry import set_span_attributes, start_span
 from app.tools.tool_registry import ToolExecutionRecord, ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -221,29 +223,44 @@ class InvestigationService:
         self.retriever = retriever
 
     def investigate(self, request: InvestigateRequest) -> InvestigateResponse:
-        context = InvestigationContext(
-            candidate_log_paths=self._resolve_candidate_log_paths(request),
-            cached_results={},
-            baseline_records=[],
-            planner_records=[],
-            support_records=[],
-            retrieval_hits=[],
-            retrieval_status="not_used",
-        )
+        with start_span(
+            "investigate.request",
+            {
+                "investigate.prompt_chars": len(request.prompt),
+                "investigate.candidate_log_count": len(request.candidate_log_paths),
+            },
+        ) as span:
+            context = InvestigationContext(
+                candidate_log_paths=self._resolve_candidate_log_paths(request),
+                cached_results={},
+                baseline_records=[],
+                planner_records=[],
+                support_records=[],
+                retrieval_hits=[],
+                retrieval_status="not_used",
+            )
 
-        context.baseline_records = self._collect_baseline_records(request, context)
-        context.planner_records = self._run_planner_loop(request, context)
-        context.retrieval_hits, context.retrieval_status = self._retrieve_knowledge(request, context)
+            context.baseline_records = self._collect_baseline_records(request, context)
+            context.planner_records = self._run_planner_loop(request, context)
+            context.retrieval_hits, context.retrieval_status = self._retrieve_knowledge(request, context)
 
-        model_response = self._generate_model_response(request, context)
-        context.support_records = self._collect_support_records(model_response, context)
+            model_response = self._generate_model_response(request, context)
+            context.support_records = self._collect_support_records(model_response, context)
 
-        grounded_response = self._ground_response(request, model_response, context)
-        try:
-            self.tool_registry.incident_tools.save_incident(request, grounded_response)
-        except OSError as exc:
-            logger.warning("failed to persist incident summary: %s", exc)
-        return grounded_response
+            grounded_response = self._ground_response(request, model_response, context)
+            try:
+                self.tool_registry.incident_tools.save_incident(request, grounded_response)
+            except OSError as exc:
+                logger.warning("failed to persist incident summary: %s", exc)
+            set_span_attributes(
+                span,
+                {
+                    "investigate.incident_type": grounded_response.incident_type,
+                    "investigate.retrieval_status": grounded_response.retrieval_status,
+                    "investigate.tool_record_count": len(context.all_records),
+                },
+            )
+            return grounded_response
 
     def _resolve_candidate_log_paths(self, request: InvestigateRequest) -> list[str]:
         if request.candidate_log_paths:
@@ -294,80 +311,101 @@ class InvestigationService:
         request: InvestigateRequest,
         context: InvestigationContext,
     ) -> list[ToolExecutionRecord]:
-        baseline_summary = self._build_evidence_summary(context.baseline_records)
-        baseline_citations = dedupe_preserve_order(
-            self._collect_evidence_citations(context.baseline_records)
-        )
-        planner_messages = build_investigation_planner_messages(
-            request=request,
-            candidate_log_paths=context.candidate_log_paths,
-            baseline_evidence_summary=baseline_summary,
-            completed_evidence_citations=baseline_citations,
-        )
-
-        records: list[ToolExecutionRecord] = []
-
-        for _ in range(self.settings.tool_max_iterations):
-            turn = self.gateway.chat(
-                model=self.settings.investigate_model,
-                messages=planner_messages,
-                tools=self.tool_registry.tools,
+        with start_span(
+            "investigate.planner_loop",
+            {
+                "investigate.max_iterations": self.settings.tool_max_iterations,
+                "investigate.candidate_log_count": len(context.candidate_log_paths),
+            },
+        ) as span:
+            baseline_summary = self._build_evidence_summary(context.baseline_records)
+            baseline_citations = dedupe_preserve_order(
+                self._collect_evidence_citations(context.baseline_records)
             )
-            if not turn.tool_calls:
-                break
+            planner_messages = build_investigation_planner_messages(
+                request=request,
+                candidate_log_paths=context.candidate_log_paths,
+                baseline_evidence_summary=baseline_summary,
+                completed_evidence_citations=baseline_citations,
+            )
 
-            planner_messages.append(turn.message)
-            for tool_call in turn.tool_calls:
-                result_text, record = self._execute_tool_call(tool_call, context.cached_results)
-                planner_messages.append(
-                    {
-                        "role": "tool",
-                        "tool_name": tool_call.name,
-                        "content": result_text,
-                    }
-                )
-                records.append(record)
-                logger.info(
-                    "investigation_tool_call tool=%s ok=%s cached=%s args=%s",
-                    record.name,
-                    record.ok,
-                    record.cached,
-                    record.arguments,
-                )
+            records: list[ToolExecutionRecord] = []
 
-        return records
+            for _ in range(self.settings.tool_max_iterations):
+                turn = self.gateway.chat(
+                    model=self.settings.investigate_model,
+                    messages=planner_messages,
+                    tools=self.tool_registry.tools,
+                )
+                if not turn.tool_calls:
+                    break
+
+                planner_messages.append(turn.message)
+                for tool_call in turn.tool_calls:
+                    result_text, record = self._execute_tool_call(tool_call, context.cached_results)
+                    planner_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_name": tool_call.name,
+                            "content": result_text,
+                        }
+                    )
+                    records.append(record)
+                    logger.info(
+                        "investigation_tool_call tool=%s ok=%s cached=%s duration_ms=%s args=%s",
+                        record.name,
+                        record.ok,
+                        record.cached,
+                        record.duration_ms,
+                        record.arguments,
+                    )
+
+            set_span_attributes(
+                span,
+                {
+                    "investigate.planner_records": len(records),
+                },
+            )
+            return records
 
     def _generate_model_response(
         self,
         request: InvestigateRequest,
         context: InvestigationContext,
     ) -> InvestigateModelResponse:
-        records = context.all_records
-        evidence_summary = self._build_evidence_summary(records)
-        retrieval_summary = format_retrieval_hits_for_prompt(context.retrieval_hits)
-        evidence_citations = dedupe_preserve_order(
-            [
-                *self._collect_evidence_citations(records),
-                *retrieval_citations(context.retrieval_hits),
-            ]
-        )
-        schema = InvestigateModelResponse.model_json_schema()
-        final_messages = build_investigation_final_messages(
-            request=request,
-            evidence_summary=evidence_summary,
-            retrieved_evidence_summary=retrieval_summary,
-            schema=schema,
-            evidence_citations=evidence_citations,
-        )
-        final_turn = self.gateway.chat(
-            model=self.settings.investigate_model,
-            messages=final_messages,
-            format=schema,
-        )
+        with start_span(
+            "investigate.model_response",
+            {
+                "investigate.record_count": len(context.all_records),
+                "investigate.retrieval_hit_count": len(context.retrieval_hits),
+            },
+        ):
+            records = context.all_records
+            evidence_summary = self._build_evidence_summary(records)
+            retrieval_summary = format_retrieval_hits_for_prompt(context.retrieval_hits)
+            evidence_citations = dedupe_preserve_order(
+                [
+                    *self._collect_evidence_citations(records),
+                    *retrieval_citations(context.retrieval_hits),
+                ]
+            )
+            schema = InvestigateModelResponse.model_json_schema()
+            final_messages = build_investigation_final_messages(
+                request=request,
+                evidence_summary=evidence_summary,
+                retrieved_evidence_summary=retrieval_summary,
+                schema=schema,
+                evidence_citations=evidence_citations,
+            )
+            final_turn = self.gateway.chat(
+                model=self.settings.investigate_model,
+                messages=final_messages,
+                format=schema,
+            )
 
-        return InvestigateModelResponse.model_validate_json(
-            strip_json_fences(final_turn.content)
-        )
+            return InvestigateModelResponse.model_validate_json(
+                strip_json_fences(final_turn.content)
+            )
 
     def _collect_support_records(
         self,
@@ -409,6 +447,7 @@ class InvestigationService:
                 arguments=cached_record.arguments,
                 ok=cached_record.ok,
                 cached=True,
+                duration_ms=cached_record.duration_ms,
                 payload=cached_record.payload,
             )
 
@@ -941,6 +980,7 @@ class InvestigationService:
         request: InvestigateRequest,
         context: InvestigationContext,
     ) -> tuple[list[RetrievalHit], RetrievalStatus]:
+        started = perf_counter()
         records = context.all_records
         query_parts = [
             request.prompt.strip(),
@@ -953,26 +993,49 @@ class InvestigationService:
         if not query:
             return [], "not_used"
         incident_type_hint = request.incident_type_hint or guess_incident_type(query)
-        try:
-            hits = self.retriever.search(
-                query=query,
-                top_k=max(self.settings.retrieval_top_k * 2, 6),
-                document_types=INVESTIGATION_RETRIEVAL_DOCUMENT_TYPES,
-                incident_type_hint=incident_type_hint,
-            )
-        except Exception as exc:
-            logger.warning("investigation retrieval unavailable: %s", exc)
-            return [], "unavailable"
+        with start_span(
+            "investigate.retrieval",
+            {
+                "investigate.query_chars": len(query),
+                "investigate.incident_type_hint": incident_type_hint,
+            },
+        ) as span:
+            try:
+                hits = self.retriever.search(
+                    query=query,
+                    top_k=max(self.settings.retrieval_top_k * 2, 6),
+                    document_types=INVESTIGATION_RETRIEVAL_DOCUMENT_TYPES,
+                    incident_type_hint=incident_type_hint,
+                )
+            except Exception as exc:
+                logger.warning("investigation retrieval unavailable: %s", exc)
+                set_span_attributes(span, {"investigate.retrieval_status": "unavailable"})
+                return [], "unavailable"
 
-        reranked_hits = sorted(
-            hits,
-            key=lambda hit: (
-                _retrieval_section_priority(hit),
-                -(hit.similarity_score or 0.0),
-                hit.citation,
-            ),
-        )[: self.settings.retrieval_top_k]
-        return reranked_hits, ("used" if reranked_hits else "not_used")
+            reranked_hits = sorted(
+                hits,
+                key=lambda hit: (
+                    _retrieval_section_priority(hit),
+                    -(hit.similarity_score or 0.0),
+                    hit.citation,
+                ),
+            )[: self.settings.retrieval_top_k]
+            duration_ms = (perf_counter() - started) * 1000
+            logger.info(
+                "investigation_retrieval incident_type_hint=%s hits=%s duration_ms=%.3f",
+                incident_type_hint,
+                len(reranked_hits),
+                duration_ms,
+            )
+            set_span_attributes(
+                span,
+                {
+                    "investigate.retrieval_status": "used" if reranked_hits else "not_used",
+                    "investigate.retrieval_hits": len(reranked_hits),
+                    "investigate.retrieval_duration_ms": round(duration_ms, 3),
+                },
+            )
+            return reranked_hits, ("used" if reranked_hits else "not_used")
 
     def _calibrated_confidence(
         self,

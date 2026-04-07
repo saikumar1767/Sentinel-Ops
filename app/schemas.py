@@ -64,6 +64,7 @@ DocumentType = Literal[
     "github_issue",
     "troubleshooting_note",
 ]
+ApprovalAction = Literal["approve", "reject", "resume"]
 
 
 class AnalyzeRequest(BaseModel):
@@ -398,6 +399,23 @@ class WorkflowApprovalRequestInfo(BaseModel):
         return _clean_string_list(value)
 
 
+class WorkflowAuditEvent(BaseModel):
+    event_id: str = Field(min_length=1, max_length=120)
+    thread_id: str = Field(min_length=1, max_length=120)
+    recorded_at: datetime
+    action: ApprovalAction
+    decision: ApprovalStatus
+    review_notes: str | None = Field(default=None, max_length=600)
+    edited_remediation_plan: list[str] = Field(default_factory=list, max_length=8)
+    status_after: WorkflowStatus
+    request_id: str | None = Field(default=None, max_length=120)
+
+    @field_validator("edited_remediation_plan")
+    @classmethod
+    def clean_audit_plan(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)
+
+
 class WorkflowToolResult(BaseModel):
     name: str = Field(
         description="Stable tool identifier executed while gathering workflow evidence."
@@ -412,6 +430,11 @@ class WorkflowToolResult(BaseModel):
     cached: bool = Field(
         default=False,
         description="Whether the tool output was served from the workflow-local cache.",
+    )
+    duration_ms: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Wall-clock execution time for the tool call in milliseconds.",
     )
     payload: dict[str, Any] = Field(
         default_factory=dict,
@@ -570,6 +593,10 @@ class WorkflowThreadResponse(BaseModel):
         default=None,
         description="Structured approval prompt shown when the workflow is paused for human review.",
     )
+    audit_trail: list[WorkflowAuditEvent] = Field(
+        default_factory=list,
+        description="Recorded approval and resume events for this workflow thread.",
+    )
     retrieval_status: RetrievalStatus = "not_used"
     tool_results: list[WorkflowToolResult] = Field(
         default_factory=list,
@@ -640,6 +667,12 @@ class ProblemDetailResponse(BaseModel):
         default=None,
         description="Workflow thread identifier when the problem is associated with a specific thread.",
     )
+
+
+class WorkflowAuditResponse(BaseModel):
+    thread_id: str = Field(min_length=1, max_length=120)
+    total_events: int = Field(ge=0)
+    events: list[WorkflowAuditEvent] = Field(default_factory=list)
 
 
 class SavedIncidentSummary(BaseModel):
@@ -866,7 +899,7 @@ class LivenessResponse(BaseModel):
                 "summary": "API process is alive.",
                 "app": {
                     "name": "SentinelOps",
-                    "version": "0.4.0",
+                    "version": "0.5.0",
                 },
             }
         }
@@ -883,12 +916,15 @@ class ReadinessResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "check_type": "readiness",
-                "ready": False,
+                "scope": "traffic",
+                "ready": True,
+                "traffic_ready": True,
+                "strict_ready": False,
                 "status": "degraded",
-                "summary": "One or more configured capabilities are not ready to serve traffic.",
+                "summary": "Core incident analysis traffic is ready, but one or more optional capabilities are degraded.",
                 "app": {
                     "name": "SentinelOps",
-                    "version": "0.4.0",
+                    "version": "0.5.0",
                 },
                 "dependencies": {
                     "ollama": {
@@ -943,12 +979,128 @@ class ReadinessResponse(BaseModel):
         }
     )
     check_type: Literal["readiness"]
+    scope: Literal["traffic", "strict"] = "traffic"
     ready: bool
-    status: Literal["ok", "degraded"]
+    traffic_ready: bool
+    strict_ready: bool
+    status: Literal["ok", "degraded", "unavailable"]
     summary: str
     app: HealthAppInfo
     dependencies: dict[str, HealthDependency]
     capabilities: dict[str, HealthDependency] = Field(default_factory=dict)
+
+
+class MetricsRequestTotals(BaseModel):
+    total_requests: int = Field(ge=0)
+    error_requests: int = Field(ge=0)
+    average_latency_ms: float = Field(ge=0.0)
+
+
+class MetricsRouteUsage(BaseModel):
+    method: str
+    path: str
+    request_count: int = Field(ge=0)
+    error_count: int = Field(ge=0)
+    average_latency_ms: float = Field(ge=0.0)
+    p95_latency_ms: float = Field(ge=0.0)
+    max_latency_ms: float = Field(ge=0.0)
+    last_status_code: int | None = Field(default=None, ge=100, le=599)
+
+
+class MetricsModelUsage(BaseModel):
+    operation: Literal["chat", "embed"]
+    model: str
+    call_count: int = Field(ge=0)
+    cache_hit_count: int = Field(ge=0)
+    retry_count: int = Field(ge=0)
+    failure_count: int = Field(ge=0)
+    average_latency_ms: float = Field(ge=0.0)
+    p95_latency_ms: float = Field(ge=0.0)
+    max_latency_ms: float = Field(ge=0.0)
+    prompt_tokens: int = Field(ge=0)
+    completion_tokens: int = Field(ge=0)
+    total_tokens: int = Field(ge=0)
+    estimated_cost_usd: float = Field(ge=0.0)
+
+
+class MetricsCacheUsage(BaseModel):
+    cache_name: str
+    hit_count: int = Field(ge=0)
+    miss_count: int = Field(ge=0)
+    set_count: int = Field(ge=0)
+    eviction_count: int = Field(ge=0)
+    expiration_count: int = Field(ge=0)
+    current_size: int = Field(ge=0)
+    max_size: int = Field(ge=0)
+
+
+class MetricsResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "generated_at": "2026-04-06T00:00:00Z",
+                "uptime_seconds": 132.441,
+                "app": {
+                    "name": "SentinelOps",
+                    "version": "0.5.0",
+                },
+                "requests": {
+                    "total_requests": 12,
+                    "error_requests": 1,
+                    "average_latency_ms": 84.233,
+                },
+                "routes": [
+                    {
+                        "method": "POST",
+                        "path": "/analyze",
+                        "request_count": 4,
+                        "error_count": 0,
+                        "average_latency_ms": 72.5,
+                        "p95_latency_ms": 95.1,
+                        "max_latency_ms": 95.1,
+                        "last_status_code": 200,
+                    }
+                ],
+                "model_usage": [
+                    {
+                        "operation": "chat",
+                        "model": "llama3.2",
+                        "call_count": 6,
+                        "cache_hit_count": 2,
+                        "retry_count": 1,
+                        "failure_count": 0,
+                        "average_latency_ms": 248.331,
+                        "p95_latency_ms": 402.118,
+                        "max_latency_ms": 402.118,
+                        "prompt_tokens": 1480,
+                        "completion_tokens": 524,
+                        "total_tokens": 2004,
+                        "estimated_cost_usd": 0.0,
+                    }
+                ],
+                "caches": [
+                    {
+                        "cache_name": "ollama_chat",
+                        "hit_count": 2,
+                        "miss_count": 4,
+                        "set_count": 4,
+                        "eviction_count": 0,
+                        "expiration_count": 0,
+                        "current_size": 4,
+                        "max_size": 256,
+                    }
+                ],
+            }
+        }
+    )
+
+    generated_at: datetime
+    uptime_seconds: float = Field(ge=0.0)
+    app: HealthAppInfo
+    requests: MetricsRequestTotals
+    routes: list[MetricsRouteUsage] = Field(default_factory=list)
+    model_usage: list[MetricsModelUsage] = Field(default_factory=list)
+    caches: list[MetricsCacheUsage] = Field(default_factory=list)
 
 
 class EvalScenarioSummary(BaseModel):

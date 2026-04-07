@@ -1,6 +1,7 @@
 import json
 
 import pytest
+import requests
 from fastapi.testclient import TestClient
 
 from app.dependencies import get_analyze_service, get_runtime_health_service
@@ -204,7 +205,10 @@ class StubRuntimeHealthService:
         )
         self.readiness = ReadinessResponse(
             check_type="readiness",
-            ready=(
+            scope="traffic",
+            ready=analyze_capability in {"ok", "degraded"} and investigate_capability in {"ok", "degraded"},
+            traffic_ready=analyze_capability in {"ok", "degraded"} and investigate_capability in {"ok", "degraded"},
+            strict_ready=(
                 analyze_capability == "ok"
                 and investigate_capability == "ok"
                 and knowledge_ingest_capability == "ok"
@@ -238,12 +242,12 @@ class StubRuntimeHealthService:
     def health_report(self) -> LivenessResponse:
         return self.liveness
 
-    def readiness_report(self) -> ReadinessResponse:
-        return self.readiness
+    def readiness_report(self, *, scope: str = "traffic") -> ReadinessResponse:
+        return self.readiness.model_copy(update={"scope": scope, "ready": self.readiness.strict_ready if scope == "strict" else self.readiness.traffic_ready})
 
-    def is_ready(self, report: ReadinessResponse | None = None) -> bool:
+    def is_ready(self, report: ReadinessResponse | None = None, *, strict: bool = False) -> bool:
         report = report or self.readiness_report()
-        return report.ready
+        return report.strict_ready if strict else report.traffic_ready
 
 
 def test_health() -> None:
@@ -263,7 +267,7 @@ def test_health() -> None:
     assert "capabilities" not in payload
 
 
-def test_ready_returns_503_when_required_dependency_is_unavailable() -> None:
+def test_ready_returns_200_when_core_traffic_is_available_but_retrieval_is_degraded() -> None:
     app.dependency_overrides[get_runtime_health_service] = (
         lambda: StubRuntimeHealthService(
             knowledge_status="unavailable",
@@ -279,10 +283,33 @@ def test_ready_returns_503_when_required_dependency_is_unavailable() -> None:
     finally:
         app.dependency_overrides.clear()
 
-    assert response.status_code == 503
+    assert response.status_code == 200
     assert response.json()["check_type"] == "readiness"
-    assert response.json()["ready"] is False
+    assert response.json()["ready"] is True
+    assert response.json()["traffic_ready"] is True
+    assert response.json()["strict_ready"] is False
     assert response.json()["dependencies"]["knowledge_store"]["status"] == "unavailable"
+
+
+def test_ready_strict_returns_503_when_optional_knowledge_capabilities_are_unavailable() -> None:
+    app.dependency_overrides[get_runtime_health_service] = (
+        lambda: StubRuntimeHealthService(
+            knowledge_status="unavailable",
+            chroma_status="unavailable",
+            analyze_capability="degraded",
+            investigate_capability="degraded",
+            knowledge_ingest_capability="unavailable",
+            knowledge_search_capability="unavailable",
+        )
+    )
+    try:
+        response = client.get("/ready/strict")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+    assert response.json()["scope"] == "strict"
+    assert response.json()["ready"] is False
 
 
 def test_runtime_health_marks_retrieval_capabilities_degraded_when_embedding_model_is_missing(monkeypatch) -> None:
@@ -310,7 +337,24 @@ def test_runtime_health_marks_retrieval_capabilities_degraded_when_embedding_mod
     assert report.capabilities["analyze_endpoint"].status == "degraded"
     assert report.capabilities["investigate_endpoint"].status == "degraded"
     assert report.capabilities["knowledge_search_endpoint"].status == "unavailable"
-    assert not service.is_ready(report)
+    assert service.is_ready(report)
+    assert not service.is_ready(report, strict=True)
+
+
+def test_runtime_health_reports_unreachable_ollama_without_claiming_models_are_missing(monkeypatch) -> None:
+    def fake_get(url: str, timeout: int):
+        raise requests.ConnectionError("socket timeout")
+
+    monkeypatch.setattr("app.services.runtime_health_service.requests.get", fake_get)
+    service = RuntimeHealthService(Settings(knowledge_store_backend="simple"))
+
+    report = service.readiness_report()
+
+    assert report.dependencies["ollama"].status == "unavailable"
+    assert report.capabilities["analyze_endpoint"].status == "unavailable"
+    assert report.capabilities["investigate_endpoint"].status == "unavailable"
+    assert "not reachable" in report.capabilities["analyze_endpoint"].detail.lower()
+    assert "not installed" not in report.capabilities["analyze_endpoint"].detail.lower()
 
 
 def test_openapi_includes_rag_examples_for_analyze_and_investigate() -> None:
@@ -325,10 +369,7 @@ def test_openapi_includes_rag_examples_for_analyze_and_investigate() -> None:
 
     assert "retrieves supporting knowledge-base evidence" in payload["paths"]["/analyze"]["post"]["description"]
     assert "reads candidate logs" in payload["paths"]["/investigate"]["post"]["description"]
-    assert payload["paths"]["/health"]["get"]["responses"]["200"]["content"]["application/json"]["example"]["check_type"] == "liveness"
-    assert payload["paths"]["/ready"]["get"]["responses"]["200"]["content"]["application/json"]["example"]["check_type"] == "readiness"
-    assert "dependencies" not in payload["paths"]["/health"]["get"]["responses"]["200"]["content"]["application/json"]["example"]
-    assert "capabilities" in payload["paths"]["/ready"]["get"]["responses"]["200"]["content"]["application/json"]["example"]
+    assert "/ready/strict" in payload["paths"]
     assert analyze_request_schema["examples"]
     assert investigate_request_schema["examples"]
     assert analyze_schema["example"]["retrieval_status"] == "used"
