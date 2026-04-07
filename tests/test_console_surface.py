@@ -21,7 +21,7 @@ from app.schemas import (
     WorkflowEvalSummary,
 )
 from app.services.console_service import ConsoleService
-from app.settings import Settings
+from app.settings import PROJECT_ROOT, Settings
 from scripts.run_operations_report import build_report
 
 
@@ -209,11 +209,35 @@ def test_console_service_loads_repo_incidents_and_builds_timeline() -> None:
     assert timeline.total_entries >= 1
     assert all(entry.entry_id for entry in timeline.entries)
     assert all(entry.source in {"runtime", "reference"} for entry in timeline.entries)
-    assert {entry.source for entry in timeline.entries} >= {"runtime", "reference"}
+    assert "reference" in {entry.source for entry in timeline.entries}
 
     assert overview.incident_count == incident_library.incident_count
     assert overview.eval_total_cases == 54
     assert "approval" in overview.library_categories
+
+
+def test_console_service_timeline_merges_runtime_and_reference_entries(tmp_path) -> None:
+    runtime_dir = tmp_path / "recent_incidents"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+
+    reference_payload = json.loads(
+        (PROJECT_ROOT / "data" / "reference_incidents" / "20260328T141500Z-database.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    reference_payload["created_at"] = "2026-04-07T12:00:00Z"
+    (runtime_dir / "20260407T120000Z-database.json").write_text(
+        json.dumps(reference_payload),
+        encoding="utf-8",
+    )
+
+    settings = Settings(incident_history_dir=runtime_dir)
+    service = ConsoleService(settings=settings, evaluation_service=StubEvaluationSummaryService())
+
+    timeline = service.timeline()
+
+    assert timeline.total_entries >= 2
+    assert {entry.source for entry in timeline.entries} >= {"runtime", "reference"}
 
 
 def test_operations_report_can_render_json(tmp_path) -> None:
