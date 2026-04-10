@@ -87,8 +87,8 @@ class ScriptedWorkflowGateway:
 
 
 def build_workflow_service(case, workdir) -> WorkflowService:
-    history_dir = workdir / "recent_incidents"
-    shutil.copytree(PROJECT_ROOT / "data" / "recent_incidents", history_dir)
+    history_dir = workdir / "reference_incidents"
+    shutil.copytree(PROJECT_ROOT / "data" / "reference_incidents", history_dir)
 
     settings = Settings(
         allowed_log_roots=[PROJECT_ROOT / "samples", PROJECT_ROOT / "data" / "logs"],

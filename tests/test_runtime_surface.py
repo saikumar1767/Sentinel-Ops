@@ -258,7 +258,7 @@ def test_metrics_normalize_workflow_audit_paths() -> None:
     client = TestClient(app)
 
     try:
-        audit_response = client.get("/workflow/workflow-audit-demo/audit")
+        audit_response = client.get("/workflow/workflow-audit-case/audit")
         metrics_response = client.get("/metrics")
     finally:
         app.dependency_overrides.clear()
@@ -268,7 +268,7 @@ def test_metrics_normalize_workflow_audit_paths() -> None:
     payload = metrics_response.json()
     routes = {(item["method"], item["path"]): item for item in payload["routes"]}
     assert ("GET", "/workflow/{thread_id}/audit") in routes
-    assert ("GET", "/workflow/workflow-audit-demo/audit") not in routes
+    assert ("GET", "/workflow/workflow-audit-case/audit") not in routes
 
 
 def test_ollama_gateway_retries_then_serves_cached_response_with_metrics() -> None:

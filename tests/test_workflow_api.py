@@ -134,8 +134,8 @@ class RepeatingCompareWorkflowGateway:
 
 
 def build_workflow_service(tmp_path, *, gateway=None, retriever=None, audit_trail=None) -> WorkflowService:
-    history_dir = tmp_path / "recent_incidents"
-    shutil.copytree(PROJECT_ROOT / "data" / "recent_incidents", history_dir)
+    history_dir = tmp_path / "reference_incidents"
+    shutil.copytree(PROJECT_ROOT / "data" / "reference_incidents", history_dir)
 
     settings = Settings(
         allowed_log_roots=[PROJECT_ROOT / "samples", PROJECT_ROOT / "data" / "logs"],
@@ -329,7 +329,7 @@ def test_workflow_failure_is_persisted_as_failed_thread_state(tmp_path) -> None:
         start_response = client.post(
             "/workflow/investigate",
             json={
-                "thread_id": "workflow-failure-demo",
+                "thread_id": "workflow-failure-case",
                 "prompt": "Investigate this incident using the failing run and the previous healthy run.",
                 "candidate_log_paths": [
                     "data/logs/database-current.log",
@@ -338,7 +338,7 @@ def test_workflow_failure_is_persisted_as_failed_thread_state(tmp_path) -> None:
                 "incident_type_hint": "database",
             },
         )
-        state_response = client.get("/workflow/workflow-failure-demo")
+        state_response = client.get("/workflow/workflow-failure-case")
     finally:
         app.dependency_overrides.clear()
         service.close()
@@ -368,7 +368,7 @@ def test_workflow_cannot_resume_completed_thread(tmp_path) -> None:
         start_response = client.post(
             "/workflow/investigate",
             json={
-                "thread_id": "workflow-complete-demo",
+                "thread_id": "workflow-complete-case",
                 "prompt": "Investigate this incident using the failing run and the previous healthy run.",
                 "candidate_log_paths": [
                     "data/logs/database-current.log",
@@ -379,7 +379,7 @@ def test_workflow_cannot_resume_completed_thread(tmp_path) -> None:
             },
         )
         resume_response = client.post(
-            "/workflow/workflow-complete-demo/resume",
+            "/workflow/workflow-complete-case/resume",
             json={"decision": "approved"},
         )
     finally:
@@ -394,7 +394,7 @@ def test_workflow_cannot_resume_completed_thread(tmp_path) -> None:
     assert payload["status"] == 409
     assert payload["code"] == "workflow_thread_conflict"
     assert "already complete" in payload["detail"]
-    assert payload["thread_id"] == "workflow-complete-demo"
+    assert payload["thread_id"] == "workflow-complete-case"
 
 
 def test_workflow_tool_results_deduplicate_cached_replays(tmp_path) -> None:
@@ -406,7 +406,7 @@ def test_workflow_tool_results_deduplicate_cached_replays(tmp_path) -> None:
         response = client.post(
             "/workflow/investigate",
             json={
-                "thread_id": "workflow-dedup-demo",
+                "thread_id": "workflow-dedup-case",
                 "prompt": "Investigate this incident using the failing run and the previous healthy run.",
                 "candidate_log_paths": [
                     "data/logs/database-current.log",
@@ -457,7 +457,7 @@ def test_workflow_start_duplicate_thread_returns_problem_details(tmp_path) -> No
         first = client.post(
             "/workflow/investigate",
             json={
-                "thread_id": "workflow-duplicate-demo",
+                "thread_id": "workflow-duplicate-case",
                 "prompt": "Investigate this incident using the failing run and the previous healthy run.",
                 "candidate_log_paths": [
                     "data/logs/database-current.log",
@@ -469,7 +469,7 @@ def test_workflow_start_duplicate_thread_returns_problem_details(tmp_path) -> No
         second = client.post(
             "/workflow/investigate",
             json={
-                "thread_id": "workflow-duplicate-demo",
+                "thread_id": "workflow-duplicate-case",
                 "prompt": "Investigate this incident using the failing run and the previous healthy run.",
                 "candidate_log_paths": [
                     "data/logs/database-current.log",
@@ -486,7 +486,7 @@ def test_workflow_start_duplicate_thread_returns_problem_details(tmp_path) -> No
     assert second.status_code == 409
     payload = second.json()
     assert payload["code"] == "workflow_thread_conflict"
-    assert payload["thread_id"] == "workflow-duplicate-demo"
+    assert payload["thread_id"] == "workflow-duplicate-case"
     assert "already exists" in payload["detail"]
 
 
@@ -500,7 +500,7 @@ def test_workflow_audit_trail_records_approval_events(tmp_path) -> None:
         start = client.post(
             "/workflow/investigate",
             json={
-                "thread_id": "workflow-audit-demo",
+                "thread_id": "workflow-audit-case",
                 "prompt": "Investigate this incident using the failing run and the previous healthy run.",
                 "candidate_log_paths": [
                     "data/logs/database-current.log",
@@ -510,10 +510,10 @@ def test_workflow_audit_trail_records_approval_events(tmp_path) -> None:
             },
         )
         approve = client.post(
-            "/workflow/workflow-audit-demo/approve",
+            "/workflow/workflow-audit-case/approve",
             json={"review_notes": "Approved by incident manager."},
         )
-        audit = client.get("/workflow/workflow-audit-demo/audit")
+        audit = client.get("/workflow/workflow-audit-case/audit")
     finally:
         app.dependency_overrides.clear()
         service.close()
@@ -539,7 +539,7 @@ def test_workflow_audit_trail_records_reject_event(tmp_path) -> None:
         start = client.post(
             "/workflow/investigate",
             json={
-                "thread_id": "workflow-anonymous-audit-demo",
+                "thread_id": "workflow-anonymous-audit-case",
                 "prompt": "Investigate this incident using the failing run and the previous healthy run.",
                 "candidate_log_paths": [
                     "data/logs/database-current.log",
@@ -549,10 +549,10 @@ def test_workflow_audit_trail_records_reject_event(tmp_path) -> None:
             },
         )
         reject = client.post(
-            "/workflow/workflow-anonymous-audit-demo/reject",
+            "/workflow/workflow-anonymous-audit-case/reject",
             json={"reason": "Rejected during anonymous audit coverage."},
         )
-        audit = client.get("/workflow/workflow-anonymous-audit-demo/audit")
+        audit = client.get("/workflow/workflow-anonymous-audit-case/audit")
     finally:
         app.dependency_overrides.clear()
         service.close()

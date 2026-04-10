@@ -77,7 +77,7 @@ def indexed_knowledge_service(tmp_path_factory):
     settings = Settings(
         knowledge_base_dir=PROJECT_ROOT / "data" / "knowledge",
         incident_templates_dir=PROJECT_ROOT / "data" / "incident_templates",
-        incident_history_dir=PROJECT_ROOT / "data" / "recent_incidents",
+        incident_history_dir=PROJECT_ROOT / "data" / "reference_incidents",
         knowledge_index_path=chroma_path / "knowledge-index.json",
         knowledge_auto_ingest=False,
         knowledge_store_backend="simple",

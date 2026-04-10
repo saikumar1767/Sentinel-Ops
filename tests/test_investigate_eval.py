@@ -203,8 +203,8 @@ class ScriptedGateway:
 
 
 def build_investigation_service(case, tmp_path):
-    history_dir = tmp_path / "recent_incidents"
-    shutil.copytree(PROJECT_ROOT / "data" / "recent_incidents", history_dir)
+    history_dir = tmp_path / "reference_incidents"
+    shutil.copytree(PROJECT_ROOT / "data" / "reference_incidents", history_dir)
 
     settings = Settings(
         allowed_log_roots=[PROJECT_ROOT / "samples", PROJECT_ROOT / "data" / "logs"],
@@ -227,8 +227,8 @@ def build_investigation_service(case, tmp_path):
 
 
 def build_service_with_gateway(gateway, tmp_path, retriever=None):
-    history_dir = tmp_path / "recent_incidents"
-    shutil.copytree(PROJECT_ROOT / "data" / "recent_incidents", history_dir)
+    history_dir = tmp_path / "reference_incidents"
+    shutil.copytree(PROJECT_ROOT / "data" / "reference_incidents", history_dir)
 
     settings = Settings(
         allowed_log_roots=[PROJECT_ROOT / "samples", PROJECT_ROOT / "data" / "logs"],

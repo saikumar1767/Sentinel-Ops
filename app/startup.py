@@ -23,6 +23,8 @@ def validate_settings(settings: Settings) -> None:
     settings.incident_history_dir.mkdir(parents=True, exist_ok=True)
     settings.workflow_checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     settings.audit_db_path.parent.mkdir(parents=True, exist_ok=True)
+    settings.incident_library_dir.mkdir(parents=True, exist_ok=True)
+    settings.reference_incidents_dir.mkdir(parents=True, exist_ok=True)
     if settings.knowledge_store_backend == "simple":
         settings.knowledge_index_path.parent.mkdir(parents=True, exist_ok=True)
     elif settings.knowledge_store_backend == "chroma" and settings.chroma_client_mode == "persistent":

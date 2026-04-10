@@ -402,7 +402,7 @@ class EvaluationSummaryService:
             settings = Settings(
                 knowledge_base_dir=PROJECT_ROOT / "data" / "knowledge",
                 incident_templates_dir=PROJECT_ROOT / "data" / "incident_templates",
-                incident_history_dir=PROJECT_ROOT / "data" / "recent_incidents",
+                incident_history_dir=PROJECT_ROOT / "data" / "reference_incidents",
                 knowledge_index_path=temp_dir / "knowledge-index.json",
                 knowledge_auto_ingest=False,
                 knowledge_store_backend="simple",
@@ -533,8 +533,8 @@ class EvaluationSummaryService:
         )
 
     def _build_investigation_service(self, case, workdir: Path) -> InvestigationService:
-        history_dir = workdir / "recent_incidents"
-        shutil.copytree(PROJECT_ROOT / "data" / "recent_incidents", history_dir)
+        history_dir = workdir / "reference_incidents"
+        shutil.copytree(PROJECT_ROOT / "data" / "reference_incidents", history_dir)
 
         settings = Settings(
             allowed_log_roots=[PROJECT_ROOT / "samples", PROJECT_ROOT / "data" / "logs"],
@@ -554,8 +554,8 @@ class EvaluationSummaryService:
         )
 
     def _build_workflow_service(self, case, workdir: Path) -> WorkflowService:
-        history_dir = workdir / "recent_incidents"
-        shutil.copytree(PROJECT_ROOT / "data" / "recent_incidents", history_dir)
+        history_dir = workdir / "reference_incidents"
+        shutil.copytree(PROJECT_ROOT / "data" / "reference_incidents", history_dir)
 
         settings = Settings(
             allowed_log_roots=[PROJECT_ROOT / "samples", PROJECT_ROOT / "data" / "logs"],
