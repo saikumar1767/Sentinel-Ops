@@ -1,6 +1,6 @@
 SentinelOps
 
-SentinelOps is a local-first incident copilot for log triage, grounded investigations, and approval-aware workflow execution. It combines FastAPI, Ollama, Chroma, safe local tools, and durable workflow checkpoints so an operator can move from raw evidence to a structured response quickly.
+SentinelOps is a edge-first incident copilot for log triage, grounded investigations, and approval-aware workflow execution. It combines FastAPI, Ollama, Chroma, safe local tools, and durable workflow checkpoints so an operator can move from raw evidence to a structured response quickly.
 
 Core product surfaces
 - Operations console: `/console`
