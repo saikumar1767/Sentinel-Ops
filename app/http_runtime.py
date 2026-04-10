@@ -67,6 +67,7 @@ def install_openapi_contracts(app: FastAPI) -> None:
             title=app.title,
             version=app.version,
             description=app.description,
+            tags=app.openapi_tags,
             routes=app.routes,
         )
 

@@ -29,7 +29,7 @@ def test_live_ollama_and_chroma_roundtrip() -> None:
     collection_name = f"sentinelops_live_{uuid4().hex[:10]}"
     settings = Settings(
         knowledge_base_dir=knowledge_dir,
-        incident_history_dir=PROJECT_ROOT / "data" / "recent_incidents",
+        incident_history_dir=PROJECT_ROOT / "data" / "reference_incidents",
         incident_templates_dir=PROJECT_ROOT / "data" / "incident_templates",
         knowledge_store_backend="chroma",
         chroma_client_mode="http",

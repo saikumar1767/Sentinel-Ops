@@ -1,0 +1,37 @@
+{
+  "incident_id": "deployment-analysis",
+  "recommended_order": 3,
+  "title": "Deployment Readiness Failure Analysis",
+  "headline": "Compact single-call analysis for startup and rollback discussions.",
+  "category": "analysis",
+  "endpoint": "/analyze",
+  "description": "Runs the lightweight analysis path on a rollout failure log so you can show the fast incident summary route before moving into deeper workflows.",
+  "estimated_run_seconds": 45,
+  "artifact_paths": [
+    "data/logs/deployment-current.log"
+  ],
+  "request_body": {
+    "log_text": "2026-03-31 18:45:01 INFO rollout started for payments-api build 2026.03.31.4\n2026-03-31 18:45:09 ERROR readiness probe failed with connection refused on port 8080\n2026-03-31 18:45:14 ERROR missing required environment variable STRIPE_SIGNING_SECRET\n2026-03-31 18:45:17 WARN deployment controller paused rollout after consecutive failures"
+  },
+  "expected_outcome": {
+    "incident_type": "configuration",
+    "severity": "high",
+    "retrieval_status": "used",
+    "citation_keywords": [
+      "deployment-readiness-runbook"
+    ],
+    "evidence_keywords": [
+      "missing required environment variable",
+      "readiness probe failed"
+    ],
+    "notes": [
+      "Use this to explain the fast, lower-friction route for triage before deeper investigation.",
+      "It demonstrates that SentinelOps can distinguish deployment failures caused by missing configuration."
+    ]
+  },
+  "operator_steps": [
+    "Run the Analyze route.",
+    "Review the structured response and manager-friendly summary.",
+    "Use it as the before-state for why /investigate and /workflow add more evidence."
+  ]
+}

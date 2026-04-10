@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SentinelOps Operations Console</title>
+  <link rel="stylesheet" href="/static/console.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Operations Console</p>
+        <h1>SentinelOps Operations Console</h1>
+        <p class="hero-copy">
+          Incident triage, workflow playback, incident history, and system health in one local operator workspace.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <a class="ghost-link" href="/docs" target="_blank" rel="noreferrer">Open API docs</a>
+        <a class="ghost-link" href="/eval/summary" target="_blank" rel="noreferrer">Open eval summary</a>
+      </div>
+    </header>
+
+    <section class="score-grid">
+      <article class="score-card">
+        <span class="score-label">Launch</span>
+        <strong id="launchCommand">powershell -ExecutionPolicy Bypass -File scripts/start_sentinelops.ps1</strong>
+        <p>One-command startup for the local SentinelOps stack.</p>
+      </article>
+      <article class="score-card">
+        <span class="score-label">Readiness</span>
+        <strong id="readinessSummary">Loading readiness...</strong>
+        <p id="readinessDetail">Checking Ollama, Chroma, and core traffic paths.</p>
+      </article>
+      <article class="score-card">
+        <span class="score-label">Eval Pack</span>
+        <strong id="evalSummary">Loading eval pack...</strong>
+        <p id="evalDetail">Deterministic local proof for analyze, investigate, retrieval, and workflow.</p>
+      </article>
+      <article class="score-card">
+        <span class="score-label">Timeline</span>
+        <strong id="timelineSummary">Loading incident timeline...</strong>
+        <p>Recorded incidents plus reference incidents for operational context.</p>
+      </article>
+    </section>
+
+    <main class="dashboard">
+      <section class="panel scenario-list-panel">
+        <div class="panel-header">
+          <h2>Incident Library</h2>
+          <p>Choose an incident profile to run against the live API.</p>
+        </div>
+        <div id="scenarioList" class="scenario-list"></div>
+      </section>
+
+      <section class="panel workspace-panel">
+        <div class="panel-header">
+          <div>
+            <h2 id="scenarioTitle">Select an incident</h2>
+            <p id="scenarioDescription">Load an incident profile to review the request, expected outcome, and live result.</p>
+          </div>
+          <span id="scenarioChip" class="chip">No incident</span>
+        </div>
+
+        <div class="scenario-meta">
+          <div>
+            <span class="meta-label">Endpoint</span>
+            <strong id="scenarioEndpoint">-</strong>
+          </div>
+          <div>
+            <span class="meta-label">Run Time</span>
+            <strong id="scenarioDuration">-</strong>
+          </div>
+          <div>
+            <span class="meta-label">Artifacts</span>
+            <strong id="scenarioBundles">-</strong>
+          </div>
+        </div>
+
+        <div class="action-bar">
+          <button id="runScenarioButton" class="primary-button" disabled>Run Incident</button>
+          <button id="refreshTimelineButton" class="secondary-button">Refresh Timeline</button>
+        </div>
+
+        <div id="workflowControls" class="workflow-controls is-hidden">
+          <label>
+            Review notes
+            <textarea id="reviewNotesInput" rows="3" placeholder="Approved for execution, or explain why you are rejecting."></textarea>
+          </label>
+          <label>
+            Edited remediation plan
+            <textarea id="editedPlanInput" rows="3" placeholder="Optional: one step per line when you want to replace the proposed checklist."></textarea>
+          </label>
+          <div class="workflow-buttons">
+            <button id="approveButton" class="secondary-button">Approve</button>
+            <button id="rejectButton" class="secondary-button danger">Reject</button>
+          </div>
+        </div>
+
+        <div class="workspace-grid">
+          <article class="subpanel">
+            <div class="subpanel-header">
+              <h3>Scenario Request</h3>
+              <p>Exact payload used for the live call.</p>
+            </div>
+            <pre id="requestPayload" class="code-block">Select an incident to load its request payload.</pre>
+          </article>
+
+          <article class="subpanel">
+            <div class="subpanel-header">
+              <h3>Expected Outcome</h3>
+              <p>Expected outcome contract for this incident profile.</p>
+            </div>
+            <div id="expectedOutcome" class="list-block empty-state">Select an incident to inspect its expected outcome.</div>
+          </article>
+
+          <article class="subpanel">
+            <div class="subpanel-header">
+              <h3>Live Result Highlights</h3>
+              <p>Rendered from the real API response.</p>
+            </div>
+            <div id="resultHighlights" class="list-block empty-state">Run an incident to see incident type, severity, evidence, and citations.</div>
+          </article>
+
+          <article class="subpanel">
+            <div class="subpanel-header">
+              <h3>Expectation Check</h3>
+              <p>Quick match against the incident contract.</p>
+            </div>
+            <div id="expectationChecks" class="list-block empty-state">No live result yet.</div>
+          </article>
+
+          <article class="subpanel">
+            <div class="subpanel-header">
+              <h3>Tool Results &amp; Audit Trail</h3>
+              <p>Workflow-specific evidence and decision history.</p>
+            </div>
+            <div id="workflowEvidence" class="list-block empty-state">Workflow tool results and audit events appear here when available.</div>
+          </article>
+
+          <article class="subpanel">
+            <div class="subpanel-header">
+              <h3>Raw Response</h3>
+              <p>Full JSON from the API.</p>
+            </div>
+            <pre id="responsePayload" class="code-block">Run an incident to capture the raw response.</pre>
+          </article>
+        </div>
+      </section>
+
+      <aside class="panel timeline-panel">
+        <div class="panel-header">
+          <h2>Saved Incident Timeline</h2>
+          <p>Runtime captures plus reference incidents.</p>
+        </div>
+        <div id="timelineList" class="timeline-list"></div>
+      </aside>
+    </main>
+  </div>
+
+  <script type="module" src="/static/console.js"></script>
+</body>
+</html>

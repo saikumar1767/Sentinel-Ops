@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "SentinelOps"
-    app_version: str = "0.5.0"
+    app_version: str = "0.6.0"
     log_level: Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"] = "INFO"
     startup_validate_config: bool = True
     telemetry_enabled: bool = False
@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     knowledge_base_dir: Path = PROJECT_ROOT / "data" / "knowledge"
     chroma_path: Path = PROJECT_ROOT / "data" / "chroma"
     knowledge_index_path: Path = PROJECT_ROOT / "data" / "knowledge_index.json"
+    incident_library_dir: Path = PROJECT_ROOT / "data" / "incident_library"
+    reference_incidents_dir: Path = PROJECT_ROOT / "data" / "reference_incidents"
     knowledge_collection_name: str = "sentinelops_knowledge"
     knowledge_store_backend: Literal["simple", "chroma"] = "chroma"
     chroma_client_mode: Literal["http", "persistent"] = "http"
@@ -72,6 +74,7 @@ class Settings(BaseSettings):
     retrieval_cache_enabled: bool = True
     retrieval_cache_ttl_seconds: int = Field(default=900, ge=0, le=86400)
     retrieval_cache_max_entries: int = Field(default=256, ge=1, le=4096)
+    console_timeline_limit: int = Field(default=12, ge=4, le=40)
 
     max_recent_candidate_logs: int = Field(default=5, ge=1, le=20)
     tool_max_iterations: int = Field(default=4, ge=1, le=8)
@@ -109,6 +112,8 @@ class Settings(BaseSettings):
         "knowledge_base_dir",
         "chroma_path",
         "knowledge_index_path",
+        "incident_library_dir",
+        "reference_incidents_dir",
         mode="after",
     )
     @classmethod
