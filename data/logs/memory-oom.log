@@ -1,0 +1,4 @@
+2026-03-31 07:12:11 WARN heap usage exceeded 92 percent in analytics-worker
+2026-03-31 07:12:13 ERROR process terminated with exit code 137
+2026-03-31 07:12:14 ERROR kernel reported out of memory kill for analytics-worker
+2026-03-31 07:12:16 WARN swap usage reached 88 percent on node batch-04

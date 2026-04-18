@@ -1,0 +1,4 @@
+- Confirm whether the service is hitting OOM kills, swap pressure, or heap exhaustion.
+- Check memory growth trends, recent code changes, and oversized workloads.
+- Capture the top offending process or container before restarting anything.
+- Reduce load or scale capacity while you isolate the leaking component.

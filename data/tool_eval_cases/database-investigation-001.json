@@ -1,0 +1,47 @@
+﻿{
+  "id": "database-investigation-001",
+  "prompt": "Investigate this incident.",
+  "candidate_log_paths": [
+    "data/logs/database-current.log",
+    "data/logs/database-previous.log"
+  ],
+  "incident_type_hint": "database",
+  "tool_rounds": [
+    [
+      {
+        "name": "read_log_file",
+        "arguments": {
+          "path": "data/logs/database-current.log"
+        }
+      }
+    ],
+    [
+      {
+        "name": "load_incident_template",
+        "arguments": {
+          "incident_type": "database"
+        }
+      }
+    ]
+  ],
+  "final_response": {
+    "incident_type": "database",
+    "severity": "high",
+    "top_error_lines": [],
+    "suspected_root_cause": "Database connectivity degraded after connection timeouts and pool exhaustion hit the primary postgres dependency.",
+    "next_steps": [
+      "Check primary postgres reachability and active connection saturation.",
+      "Reduce application pressure or recycle stuck workers only after the database is responsive again."
+    ],
+    "manager_summary": "Payment traffic is degraded because the application cannot consistently obtain database connections.",
+    "retrieved_evidence": [],
+    "source_citations": [],
+    "confidence": 0.89
+  },
+  "expected_tools": [
+    "read_log_file",
+    "load_incident_template"
+  ]
+}
+
+

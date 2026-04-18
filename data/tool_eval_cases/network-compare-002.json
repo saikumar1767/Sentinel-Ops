@@ -1,0 +1,48 @@
+﻿{
+  "id": "network-compare-002",
+  "prompt": "Investigate the redis connectivity incident.",
+  "candidate_log_paths": [
+    "data/logs/network-previous.log",
+    "data/logs/network-current.log"
+  ],
+  "incident_type_hint": "network",
+  "tool_rounds": [
+    [
+      {
+        "name": "compare_two_logs",
+        "arguments": {
+          "path_a": "data/logs/network-previous.log",
+          "path_b": "data/logs/network-current.log"
+        }
+      }
+    ],
+    [
+      {
+        "name": "load_incident_template",
+        "arguments": {
+          "incident_type": "network"
+        }
+      }
+    ]
+  ],
+  "final_response": {
+    "incident_type": "network",
+    "severity": "high",
+    "top_error_lines": [],
+    "suspected_root_cause": "The current run introduced DNS failures, packet loss, and connection refusals when reaching redis.internal.",
+    "next_steps": [
+      "Validate DNS resolution and upstream routing for redis.internal from the affected hosts.",
+      "Stabilize the network path before retrying dependent workloads."
+    ],
+    "manager_summary": "The outage is tied to a network-path regression rather than an application-only bug.",
+    "retrieved_evidence": [],
+    "source_citations": [],
+    "confidence": 0.86
+  },
+  "expected_tools": [
+    "compare_two_logs",
+    "load_incident_template"
+  ]
+}
+
+

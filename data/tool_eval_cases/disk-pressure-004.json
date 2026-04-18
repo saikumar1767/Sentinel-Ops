@@ -1,0 +1,46 @@
+﻿{
+  "id": "disk-pressure-004",
+  "prompt": "Investigate the gateway write failures.",
+  "candidate_log_paths": [
+    "data/logs/disk-full.log"
+  ],
+  "incident_type_hint": "disk",
+  "tool_rounds": [
+    [
+      {
+        "name": "read_log_file",
+        "arguments": {
+          "path": "data/logs/disk-full.log"
+        }
+      }
+    ],
+    [
+      {
+        "name": "load_incident_template",
+        "arguments": {
+          "incident_type": "disk"
+        }
+      }
+    ]
+  ],
+  "final_response": {
+    "incident_type": "disk",
+    "severity": "high",
+    "top_error_lines": [],
+    "suspected_root_cause": "The gateway cannot write logs because the /var/log volume is effectively full and rotation is also failing.",
+    "next_steps": [
+      "Free safe disk space on the affected node and verify log rotation health.",
+      "Confirm write queues drain once capacity is restored."
+    ],
+    "manager_summary": "Gateway write failures are caused by storage exhaustion on the impacted node.",
+    "retrieved_evidence": [],
+    "source_citations": [],
+    "confidence": 0.9
+  },
+  "expected_tools": [
+    "read_log_file",
+    "load_incident_template"
+  ]
+}
+
+

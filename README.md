@@ -1,72 +1,120 @@
-SentinelOps Week 1
+SentinelOps
 
-What this does
-A local FastAPI app that accepts pasted log text and uses Ollama to return structured JSON.
+SentinelOps is a edge-first incident copilot for log triage, grounded investigations, and approval-aware workflow execution. It combines FastAPI, Ollama, Chroma, safe local tools, and durable workflow checkpoints so an operator can move from raw evidence to a structured response quickly.
 
-Requirements
-- Python 3.11+
-- uv installed and available in PowerShell
-- Ollama installed on Windows
+Core product surfaces
+- Operations console: `/console`
+- Console overview: `/console/overview`
+- Incident library: `/console/incidents`
+- Incident timeline: `/console/timeline`
+- Fast analysis: `POST /analyze`
+- One-shot investigation: `POST /investigate`
+- Workflow investigation: `POST /workflow/investigate`
+- Evaluation summary: `/eval/summary`
+- Metrics: `/metrics`
 
-First-time setup
-1. Open PowerShell in this project folder.
-2. Install Python dependencies:
-   uv sync
-3. Pull the Week 1 model:
-   ollama pull llama3.2
+Run locally
+1. Install dependencies:
+   `uv sync`
+2. Pull the local models:
+   `ollama pull llama3.2`
+   `ollama pull embeddinggemma`
+3. Start everything:
+   `powershell -ExecutionPolicy Bypass -File scripts/start_sentinelops.ps1`
+4. Open:
+   [http://127.0.0.1:8000/console](http://127.0.0.1:8000/console)
 
-How to start the app
-1. Make sure Ollama is running.
-   - Open the Ollama app from the Start menu, or
-   - Run: ollama serve
-2. In the project folder, start the FastAPI server:
-   uv run uvicorn app.main:app --reload
-3. Open the API in your browser:
-   http://127.0.0.1:8000/docs
+Manual startup
+1. Start Ollama:
+   `ollama serve`
+2. Start Chroma:
+   `powershell -ExecutionPolicy Bypass -File scripts/start_chroma_wsl.ps1`
+3. Start the API:
+   `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload`
+4. Open:
+   [http://127.0.0.1:8000/console](http://127.0.0.1:8000/console)
 
-Quick test
-Health check:
-Invoke-RestMethod http://127.0.0.1:8000/health
+What the console gives you
+- A live operator console for running incident profiles against the real API
+- An incident library with request payloads, expected outcomes, and workflow paths
+- A saved incident timeline that blends recent runtime incidents with reference incidents
+- Evaluation and readiness summaries so the system is inspectable before use
 
-Analyze a log:
+Key architecture decisions
+- Ollama runs outside Docker so local GPU access stays simple and memory overhead stays lower.
+- Chroma remains local and lightweight.
+- FastAPI owns the transport layer, OpenAPI contracts, and the console entrypoint.
+- LangGraph is used only where durable checkpoints and approval pauses add value.
+- Recorded incident profiles are part of the product surface so the app stays reproducible on one machine.
+
+Useful routes
+- `GET /health`
+- `GET /ready`
+- `GET /ready/strict`
+- `GET /console/overview`
+- `GET /console/incidents`
+- `GET /console/timeline`
+- `GET /docs`
+- `GET /eval/summary`
+- `GET /metrics`
+
+Example requests
+
+Analyze:
+```powershell
 Invoke-RestMethod http://127.0.0.1:8000/analyze `
   -Method POST `
   -ContentType "application/json" `
-  -Body '{"log_text":"2026-03-29 09:10:22 ERROR database connection timeout after 30 seconds"}'
+  -Body '{"log_text":"2026-03-31 18:45:09 ERROR readiness probe failed with connection refused on port 8080\n2026-03-31 18:45:14 ERROR missing required environment variable STRIPE_SIGNING_SECRET"}'
+```
 
-Week 3 evaluation loop
-1. Start Ollama if it is not already running.
-2. Start the API in one PowerShell window:
-   uv run uvicorn app.main:app --reload
-3. Run the HTTP evaluation script in another PowerShell window:
-   uv run python scripts/run_eval.py
-4. Run the parametrized pytest suite:
-   uv run pytest -q
+Investigate:
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/investigate `
+  -Method POST `
+  -ContentType "application/json" `
+  -Body '{"prompt":"Investigate this network incident using the failing run and the previous healthy run.","candidate_log_paths":["data/logs/network-current.log","data/logs/network-previous.log"],"incident_type_hint":"network"}'
+```
 
-Evaluation data
-- data/eval_cases/ contains the JSON eval cases
-- scripts/run_eval.py calls the local /analyze endpoint with Requests
-- tests/test_eval_smoke.py runs the repeatable pytest checks across all cases
+Workflow:
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/workflow/investigate `
+  -Method POST `
+  -ContentType "application/json" `
+  -Body '{"thread_id":"ops-database-workflow","prompt":"Investigate this incident using the failing run and the previous healthy run.","candidate_log_paths":["data/logs/database-current.log","data/logs/database-previous.log"],"incident_type_hint":"database","require_approval_for_remediation":true}'
+```
 
-Endpoints
-GET /health
-POST /analyze
+Operations proof
+- Full test suite:
+  `uv run pytest -q`
+- Console/API coverage:
+  `uv run pytest -q tests/test_console_surface.py`
+- Runtime coverage:
+  `uv run pytest -q tests/test_runtime_surface.py`
+- Workflow coverage:
+  `uv run pytest -q tests/test_workflow_api.py`
+- Evaluation summary:
+  `uv run python scripts/run_eval_summary.py`
+- Operations report:
+  `uv run python scripts/run_operations_report.py`
+- Live Ollama and Chroma check:
+  `set SENTINELOPS_RUN_LIVE_TESTS=1`
+  `uv run pytest -q tests/test_live_stack.py`
 
-Sample request
-{"log_text":"2026-03-29 09:10:22 ERROR database connection timeout after 30 seconds"}
+Supporting docs
+- Architecture: [docs/architecture.md](docs/architecture.md)
+- Operator walkthrough: [docs/operator-walkthrough.md](docs/operator-walkthrough.md)
+- Incident library notes: [docs/incident-library.md](docs/incident-library.md)
+- Video walkthrough: [docs/video-walkthrough.md](docs/video-walkthrough.md)
+- Resume bullets: [docs/resume-bullets.md](docs/resume-bullets.md)
+- Interview story: [docs/interview-story.md](docs/interview-story.md)
 
-Project structure
-- app/main.py
-- app/schemas.py
-- app/ollama_client.py
-- app/evaluation.py
-- data/eval_cases/
-- scripts/run_eval.py
-- tests/test_eval_smoke.py
-- samples/sample1.log
-- samples/sample2.log
-- samples/sample3.log
-- samples/sample4.log
-- samples/sample5.log
-- pyproject.toml
-- uv.lock
+Project layout
+- `app/` API, services, workflows, static console assets
+- `data/incident_library/` packaged incident profiles
+- `data/reference_incidents/` reference incident history
+- `data/runtime/recent_incidents/` runtime incident captures
+- `data/runtime/workflow/` workflow checkpoints
+- `data/runtime/audit/` workflow audit trail
+- `docs/` product, architecture, and communication assets
+- `scripts/` local startup and reporting commands

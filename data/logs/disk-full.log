@@ -1,0 +1,4 @@
+2026-03-31 05:41:18 ERROR no space left on device while writing nginx access log
+2026-03-31 05:41:19 WARN /var/log usage at 99 percent on node edge-02
+2026-03-31 05:41:20 ERROR rotation job failed because archive target was unavailable
+2026-03-31 05:41:21 WARN write queue backing up for api-gateway

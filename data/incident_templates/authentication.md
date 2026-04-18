@@ -1,0 +1,4 @@
+- Identify whether failures are user-specific, tenant-specific, or global.
+- Check identity provider reachability, token expiration, and recent secret rotation.
+- Review lockout thresholds, brute-force patterns, and recent auth configuration changes.
+- Restore access with the least-privileged fix and rotate exposed credentials if needed.

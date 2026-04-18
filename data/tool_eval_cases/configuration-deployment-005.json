@@ -1,0 +1,57 @@
+﻿{
+  "id": "configuration-deployment-005",
+  "prompt": "Investigate why the payments rollout failed.",
+  "candidate_log_paths": [
+    "data/logs/deployment-previous.log",
+    "data/logs/deployment-current.log"
+  ],
+  "incident_type_hint": "deployment",
+  "tool_rounds": [
+    [
+      {
+        "name": "compare_two_logs",
+        "arguments": {
+          "path_a": "data/logs/deployment-previous.log",
+          "path_b": "data/logs/deployment-current.log"
+        }
+      }
+    ],
+    [
+      {
+        "name": "grep_error_pattern",
+        "arguments": {
+          "path": "data/logs/deployment-current.log",
+          "pattern": "missing required environment variable",
+          "max_lines": 3
+        }
+      },
+      {
+        "name": "load_incident_template",
+        "arguments": {
+          "incident_type": "configuration"
+        }
+      }
+    ]
+  ],
+  "final_response": {
+    "incident_type": "configuration",
+    "severity": "high",
+    "top_error_lines": [],
+    "suspected_root_cause": "The rollout failed because STRIPE_SIGNING_SECRET is missing in the new deployment environment.",
+    "next_steps": [
+      "Restore the missing STRIPE_SIGNING_SECRET in the deployment environment.",
+      "Re-run readiness checks before resuming the rollout."
+    ],
+    "manager_summary": "This is primarily a configuration failure inside the rollout, not a generic deployment controller issue.",
+    "retrieved_evidence": [],
+    "source_citations": [],
+    "confidence": 0.92
+  },
+  "expected_tools": [
+    "compare_two_logs",
+    "grep_error_pattern",
+    "load_incident_template"
+  ]
+}
+
+

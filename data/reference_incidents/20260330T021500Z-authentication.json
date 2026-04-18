@@ -1,0 +1,17 @@
+{
+  "created_at": "2026-03-30T02:15:00Z",
+  "request": "Investigate finance tenant login failures.",
+  "candidate_log_paths": [
+    "data/logs/auth-failures.log"
+  ],
+  "incident_type": "authentication",
+  "severity": "high",
+  "manager_summary": "Authentication failures escalated after an identity-provider client issue and account lockouts hit the finance tenant.",
+  "suspected_root_cause": "Secret rotation left the identity provider client unable to validate refresh and exchange tokens correctly.",
+  "source_citations": [
+    "grep_error_pattern:data/logs/auth-failures.log",
+    "load_incident_template:authentication"
+  ],
+  "confidence": 0.82
+}
+

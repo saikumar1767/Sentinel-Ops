@@ -1,0 +1,4 @@
+- Measure backlog growth, consumer lag, and breach against processing SLAs.
+- Check whether workers are failing, throttled, or blocked on a dependency.
+- Compare queue depth to a recent healthy processing window.
+- Drain backlog safely after the blocking dependency is stabilized.

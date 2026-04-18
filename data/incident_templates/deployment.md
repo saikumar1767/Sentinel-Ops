@@ -1,0 +1,4 @@
+- Identify the exact release, environment, and service instances involved.
+- Check readiness probes, startup logs, and environment-specific config drift.
+- Compare the current rollout against the previous healthy deployment.
+- Pause or roll back the rollout if the service cannot become healthy.

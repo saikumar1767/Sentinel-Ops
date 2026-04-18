@@ -1,0 +1,14 @@
+{
+  "id": "service-crash-search-010",
+  "query": "Worker process crashed with segmentation fault and health checks keep failing after restart.",
+  "top_k": 4,
+  "incident_type_hint": "service",
+  "expected_citation_keywords": [
+    "worker-segfault-issue",
+    "service-502-note"
+  ],
+  "expected_snippet_keywords": [
+    "segmentation fault",
+    "restart"
+  ]
+}

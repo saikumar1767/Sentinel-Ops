@@ -1,0 +1,45 @@
+{
+  "incident_id": "network-investigation",
+  "recommended_order": 2,
+  "title": "Network DNS Regression Investigation",
+  "headline": "One-shot investigation with strong retrieval support and before/after comparison.",
+  "category": "investigation",
+  "endpoint": "/investigate",
+  "description": "Investigates a DNS regression using the current and previous network logs to show strong retrieval support and a concise manager summary without entering workflow mode.",
+  "estimated_run_seconds": 70,
+  "artifact_paths": [
+    "data/logs/network-current.log",
+    "data/logs/network-previous.log"
+  ],
+  "request_body": {
+    "prompt": "Investigate this network incident using the failing run and the previous healthy run.",
+    "candidate_log_paths": [
+      "data/logs/network-current.log",
+      "data/logs/network-previous.log"
+    ],
+    "incident_type_hint": "network"
+  },
+  "expected_outcome": {
+    "incident_type": "network",
+    "severity": "high",
+    "retrieval_status": "used",
+    "citation_keywords": [
+      "network-dns-runbook",
+      "compare_two_logs",
+      "read_log_file"
+    ],
+    "evidence_keywords": [
+      "dns lookup failed",
+      "connection refused"
+    ],
+    "notes": [
+      "Use this path when you want a fast grounded answer without durable workflow state.",
+      "It is a reliable retrieval example because the runbook and the previous healthy log align with the failing symptoms."
+    ]
+  },
+  "operator_steps": [
+    "Run the incident through Investigate.",
+    "Review the supporting citations and the grounded manager summary.",
+    "Use the result to explain the difference between /investigate and the checkpointed workflow."
+  ]
+}

@@ -1,0 +1,46 @@
+﻿{
+  "id": "performance-cpu-009",
+  "prompt": "Investigate the API latency spike.",
+  "candidate_log_paths": [
+    "data/logs/performance-cpu.log"
+  ],
+  "incident_type_hint": "performance",
+  "tool_rounds": [
+    [
+      {
+        "name": "read_log_file",
+        "arguments": {
+          "path": "data/logs/performance-cpu.log"
+        }
+      }
+    ],
+    [
+      {
+        "name": "load_incident_template",
+        "arguments": {
+          "incident_type": "performance"
+        }
+      }
+    ]
+  ],
+  "final_response": {
+    "incident_type": "performance",
+    "severity": "medium",
+    "top_error_lines": [],
+    "suspected_root_cause": "High CPU usage and a long-running background report job are driving the API latency increase.",
+    "next_steps": [
+      "Throttle or pause the long-running report job and verify API latency recovery.",
+      "Check whether recent workload or release changes increased CPU demand."
+    ],
+    "manager_summary": "The service is degraded rather than fully down, with CPU pressure causing a measurable latency spike.",
+    "retrieved_evidence": [],
+    "source_citations": [],
+    "confidence": 0.8
+  },
+  "expected_tools": [
+    "read_log_file",
+    "load_incident_template"
+  ]
+}
+
+

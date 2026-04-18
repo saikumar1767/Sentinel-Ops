@@ -1,0 +1,18 @@
+{
+  "created_at": "2026-03-29T09:10:00Z",
+  "request": "Investigate redis connectivity failures.",
+  "candidate_log_paths": [
+    "data/logs/network-current.log",
+    "data/logs/network-previous.log"
+  ],
+  "incident_type": "network",
+  "severity": "high",
+  "manager_summary": "Redis connectivity degraded after DNS failures and connection refusals appeared on the core path.",
+  "suspected_root_cause": "DNS resolution and outbound connection establishment to redis.internal started failing on the current run.",
+  "source_citations": [
+    "compare_two_logs:data/logs/network-previous.log vs data/logs/network-current.log",
+    "load_incident_template:network"
+  ],
+  "confidence": 0.84
+}
+

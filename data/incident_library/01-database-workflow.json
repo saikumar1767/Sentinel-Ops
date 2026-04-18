@@ -1,0 +1,49 @@
+{
+  "incident_id": "database-workflow",
+  "recommended_order": 1,
+  "title": "Database Pool Exhaustion Workflow",
+  "headline": "Approval-aware workflow for a high-impact database incident.",
+  "category": "workflow",
+  "endpoint": "/workflow/investigate",
+  "description": "Starts the full workflow using the failing and previous healthy database logs, pauses for approval, and highlights grounded evidence plus remediation planning.",
+  "estimated_run_seconds": 95,
+  "artifact_paths": [
+    "data/logs/database-current.log",
+    "data/logs/database-previous.log"
+  ],
+  "request_body": {
+    "thread_id": "ops-database-workflow",
+    "prompt": "Investigate this incident using the failing run and the previous healthy run.",
+    "candidate_log_paths": [
+      "data/logs/database-current.log",
+      "data/logs/database-previous.log"
+    ],
+    "incident_type_hint": "database",
+    "require_approval_for_remediation": true
+  },
+  "expected_outcome": {
+    "incident_type": "database",
+    "severity": "high",
+    "retrieval_status": "used",
+    "workflow_status": "waiting_for_approval",
+    "approval_status": "pending",
+    "citation_keywords": [
+      "database-timeout-runbook",
+      "compare_two_logs",
+      "read_log_file"
+    ],
+    "evidence_keywords": [
+      "connection pool exhausted",
+      "database timeout"
+    ],
+    "notes": [
+      "Use this profile first when you want to show thread creation, evidence collection, citations, and approval pause.",
+      "Approve from the console to reveal the final report and refreshed incident timeline."
+    ]
+  },
+  "operator_steps": [
+    "Load the incident and run the workflow.",
+    "Review the evidence panel and the approval request.",
+    "Approve the workflow to complete the report and refresh the incident timeline."
+  ]
+}

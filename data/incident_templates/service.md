@@ -1,0 +1,4 @@
+- Confirm whether the service is crashing, restarting, or returning degraded responses.
+- Check recent deployments, dependency errors, and crash signatures.
+- Compare the failing run with the last healthy startup or request cycle.
+- Roll back or restart only after you understand whether the fault is persistent.

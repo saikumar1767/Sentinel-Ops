@@ -1,0 +1,4 @@
+- Confirm the affected hosts, accounts, and potential blast radius immediately.
+- Preserve evidence, isolate impacted systems, and avoid destroying forensic data.
+- Check detection signatures, recent privileged actions, and containment status.
+- Escalate through incident response and rotate credentials if compromise is plausible.

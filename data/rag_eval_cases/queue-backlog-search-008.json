@@ -1,0 +1,14 @@
+{
+  "id": "queue-backlog-search-008",
+  "query": "Payments events queue backlog exceeded 50000 messages and consumer lag keeps rising.",
+  "top_k": 4,
+  "incident_type_hint": "queue",
+  "expected_citation_keywords": [
+    "queue-backlog-runbook",
+    "queue-lag-note"
+  ],
+  "expected_snippet_keywords": [
+    "backlog",
+    "consumer lag"
+  ]
+}

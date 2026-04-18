@@ -1,0 +1,13 @@
+{
+  "id": "disk-pressure-search-005",
+  "query": "Backup job failed with no space left on device and disk usage above 98 percent.",
+  "top_k": 4,
+  "incident_type_hint": "disk",
+  "expected_citation_keywords": [
+    "disk-pressure-note"
+  ],
+  "expected_snippet_keywords": [
+    "no space left",
+    "disk"
+  ]
+}

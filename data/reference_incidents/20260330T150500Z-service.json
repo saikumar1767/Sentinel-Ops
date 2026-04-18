@@ -1,0 +1,17 @@
+{
+  "created_at": "2026-03-30T15:05:00Z",
+  "request": "Investigate report-worker instability.",
+  "candidate_log_paths": [
+    "data/logs/service-restarts.log"
+  ],
+  "incident_type": "service",
+  "severity": "high",
+  "manager_summary": "The report-worker entered a crash-and-restart loop that also triggered upstream circuit breaking.",
+  "suspected_root_cause": "A segmentation fault in report-worker caused repeated restarts and health check failures.",
+  "source_citations": [
+    "read_log_file:data/logs/service-restarts.log",
+    "load_incident_template:service"
+  ],
+  "confidence": 0.86
+}
+

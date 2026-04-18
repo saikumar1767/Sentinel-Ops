@@ -1,0 +1,55 @@
+﻿{
+  "id": "queue-backlog-006",
+  "prompt": "Investigate the billing queue backlog.",
+  "candidate_log_paths": [
+    "data/logs/queue-backlog.log"
+  ],
+  "incident_type_hint": "queue",
+  "tool_rounds": [
+    [
+      {
+        "name": "read_log_file",
+        "arguments": {
+          "path": "data/logs/queue-backlog.log"
+        }
+      }
+    ],
+    [
+      {
+        "name": "grep_error_pattern",
+        "arguments": {
+          "path": "data/logs/queue-backlog.log",
+          "pattern": "lag|sla|timeout",
+          "max_lines": 4
+        }
+      },
+      {
+        "name": "load_incident_template",
+        "arguments": {
+          "incident_type": "queue"
+        }
+      }
+    ]
+  ],
+  "final_response": {
+    "incident_type": "queue",
+    "severity": "high",
+    "top_error_lines": [],
+    "suspected_root_cause": "Consumer lag is rising because downstream database timeouts are slowing billing-event acknowledgements.",
+    "next_steps": [
+      "Stabilize the downstream database dependency that is blocking queue acknowledgements.",
+      "Monitor backlog drain and SLA recovery once consumers resume normal throughput."
+    ],
+    "manager_summary": "Billing processing is at risk because queue lag is increasing faster than workers can catch up.",
+    "retrieved_evidence": [],
+    "source_citations": [],
+    "confidence": 0.88
+  },
+  "expected_tools": [
+    "read_log_file",
+    "grep_error_pattern",
+    "load_incident_template"
+  ]
+}
+
+

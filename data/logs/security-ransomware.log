@@ -1,0 +1,4 @@
+2026-03-31 22:27:05 CRITICAL antivirus detected ransomware signature on host ws-finance-07
+2026-03-31 22:27:06 CRITICAL suspicious encryption process quarantined automatically
+2026-03-31 22:27:07 WARN incident response pager triggered for secops-primary
+2026-03-31 22:27:08 ERROR shared finance drive mounted read-only for containment
