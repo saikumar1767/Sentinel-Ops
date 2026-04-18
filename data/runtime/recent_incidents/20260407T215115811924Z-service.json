@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-04-07T21:51:15.811924Z",
+  "request": "Investigate the service restart incident and keep going even if one evidence file is missing.",
+  "candidate_log_paths": [
+    "data/logs/missing-service-demo.log",
+    "data/logs/service-restarts.log"
+  ],
+  "incident_type": "service",
+  "severity": "high",
+  "manager_summary": "The current service incident is driven by segmentation fault detected in report-worker and health check failed with HTTP 502 on report-worker.",
+  "suspected_root_cause": "The current run shows segmentation fault detected in report-worker and health check failed with HTTP 502 on report-worker.",
+  "source_citations": [
+    "read_log_file:data/logs/service-restarts.log",
+    "load_incident_template:service",
+    "read_log_file:safe_failure",
+    "data/knowledge/github_issues/worker-segfault-issue.md#Summary",
+    "data/knowledge/troubleshooting_notes/service-502-note.md#Note"
+  ],
+  "retrieval_status": "used",
+  "confidence": 0.9
+}
