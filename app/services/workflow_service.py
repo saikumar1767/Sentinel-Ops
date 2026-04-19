@@ -6,12 +6,16 @@ import sqlite3
 from typing import Any
 from uuid import uuid4
 
+from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
 
 from app.audit import WorkflowAuditTrail
+from app.auth import AuthenticatedUser
 from app.log_utils import dedupe_preserve_order, looks_like_error
+from app.metadata_store import WorkflowThreadStore
 from app.ollama_client import LLMGateway
+from app.persistence import is_sqlite_url, normalize_postgres_dsn, sqlite_database_path
 from app.rag.models import RetrievalService
 from app.schemas import (
     WorkflowApproveRequest,
@@ -19,6 +23,7 @@ from app.schemas import (
     WorkflowInvestigateRequest,
     WorkflowRejectRequest,
     WorkflowResumeRequest,
+    WorkflowThreadListResponse,
     WorkflowThreadResponse,
 )
 from app.settings import Settings
@@ -37,15 +42,14 @@ class WorkflowService:
         tool_registry: ToolRegistry,
         retriever: RetrievalService,
         audit_trail: WorkflowAuditTrail | None = None,
+        thread_store: WorkflowThreadStore | None = None,
     ) -> None:
         self.settings = settings
         self.audit_trail = audit_trail
-        self.settings.workflow_checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-        self._connection = sqlite3.connect(
-            self.settings.workflow_checkpoint_path,
-            check_same_thread=False,
-        )
-        self._checkpointer = SqliteSaver(self._connection)
+        self.thread_store = thread_store
+        self._connection: sqlite3.Connection | None = None
+        self._checkpointer_context = None
+        self._checkpointer = self._build_checkpointer()
         self._graph = build_sentinel_workflow(
             nodes=SentinelWorkflowNodes(
                 settings=settings,
@@ -57,16 +61,25 @@ class WorkflowService:
         )
 
     def close(self) -> None:
-        self._connection.close()
+        if self._checkpointer_context is not None:
+            self._checkpointer_context.__exit__(None, None, None)
+            self._checkpointer_context = None
+        if self._connection is not None:
+            self._connection.close()
+            self._connection = None
 
-    def start_investigation(self, request: WorkflowInvestigateRequest) -> WorkflowThreadResponse:
+    def start_investigation(
+        self,
+        request: WorkflowInvestigateRequest,
+        *,
+        actor: AuthenticatedUser | None = None,
+    ) -> WorkflowThreadResponse:
         with start_span("workflow.start", {"workflow.has_thread_id": bool(request.thread_id)}):
             thread_id = request.thread_id or f"workflow-{uuid4().hex}"
-            config = self._config(thread_id)
             if self._thread_exists(thread_id):
                 raise ValueError(f"Workflow thread '{thread_id}' already exists.")
 
-            return self._invoke_workflow(
+            response = self._invoke_workflow(
                 thread_id,
                 {
                     "request_id": uuid4().hex,
@@ -79,6 +92,8 @@ class WorkflowService:
                     "audit_trail": [],
                 },
             )
+            self._record_thread_snapshot(response, actor=actor)
+            return response
 
     def get_thread(self, thread_id: str) -> WorkflowThreadResponse:
         with start_span("workflow.get_thread", {"workflow.thread_id": thread_id}):
@@ -87,10 +102,27 @@ class WorkflowService:
                 raise KeyError(f"Workflow thread '{thread_id}' was not found.")
             return self._build_thread_response(thread_id, snapshot, self._audit_events(thread_id))
 
+    def list_threads(
+        self,
+        *,
+        limit: int | None = None,
+        status: str | None = None,
+        incident_type: str | None = None,
+    ) -> WorkflowThreadListResponse:
+        if self.thread_store is None:
+            return WorkflowThreadListResponse(total_threads=0, threads=[])
+        return self.thread_store.list_threads(
+            limit=limit or self.settings.workflow_recent_threads_limit,
+            status=status,
+            incident_type=incident_type,
+        )
+
     def resume(
         self,
         thread_id: str,
         request: WorkflowResumeRequest,
+        *,
+        actor: AuthenticatedUser | None = None,
     ) -> WorkflowThreadResponse:
         return self._resume_with_payload(
             thread_id,
@@ -100,12 +132,15 @@ class WorkflowService:
                 "edited_remediation_plan": request.edited_remediation_plan,
             },
             action="resume",
+            actor=actor,
         )
 
     def approve(
         self,
         thread_id: str,
         request: WorkflowApproveRequest,
+        *,
+        actor: AuthenticatedUser | None = None,
     ) -> WorkflowThreadResponse:
         return self._resume_with_payload(
             thread_id,
@@ -115,12 +150,15 @@ class WorkflowService:
                 "edited_remediation_plan": request.edited_remediation_plan,
             },
             action="approve",
+            actor=actor,
         )
 
     def reject(
         self,
         thread_id: str,
         request: WorkflowRejectRequest,
+        *,
+        actor: AuthenticatedUser | None = None,
     ) -> WorkflowThreadResponse:
         return self._resume_with_payload(
             thread_id,
@@ -130,6 +168,7 @@ class WorkflowService:
                 "edited_remediation_plan": request.edited_remediation_plan,
             },
             action="reject",
+            actor=actor,
         )
 
     def audit_report(self, thread_id: str) -> WorkflowAuditResponse:
@@ -145,6 +184,7 @@ class WorkflowService:
         payload: dict[str, object],
         *,
         action: str,
+        actor: AuthenticatedUser | None = None,
     ) -> WorkflowThreadResponse:
         snapshot = self._graph.get_state(self._config(thread_id))
         if not self._snapshot_exists(snapshot):
@@ -164,12 +204,31 @@ class WorkflowService:
             payload=payload,
             status_after=response.status,
             request_id=response.request_id,
+            actor=actor,
         )
+        self._record_thread_snapshot(response, actor=actor)
         return response
 
     def _thread_exists(self, thread_id: str) -> bool:
         snapshot = self._graph.get_state(self._config(thread_id))
         return self._snapshot_exists(snapshot)
+
+    def _build_checkpointer(self):
+        database_url = self.settings.effective_workflow_checkpoint_database_url
+        if is_sqlite_url(database_url):
+            sqlite_path = sqlite_database_path(database_url) or self.settings.workflow_checkpoint_path
+            sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+            self._connection = sqlite3.connect(
+                sqlite_path,
+                check_same_thread=False,
+            )
+            return SqliteSaver(self._connection)
+
+        checkpoint_dsn = normalize_postgres_dsn(database_url)
+        self._checkpointer_context = PostgresSaver.from_conn_string(checkpoint_dsn)
+        checkpointer = self._checkpointer_context.__enter__()
+        checkpointer.setup()
+        return checkpointer
 
     def _invoke_workflow(
         self,
@@ -433,6 +492,7 @@ class WorkflowService:
         payload: dict[str, object],
         status_after: str,
         request_id: str | None,
+        actor: AuthenticatedUser | None,
     ) -> None:
         if self.audit_trail is None:
             return
@@ -452,6 +512,7 @@ class WorkflowService:
             edited_remediation_plan=edited_plan,
             status_after=status_after,
             request_id=request_id,
+            actor=actor,
         )
 
     def _audit_events(self, thread_id: str) -> list[dict[str, Any]]:
@@ -461,3 +522,13 @@ class WorkflowService:
             event.model_dump(mode="json")
             for event in self.audit_trail.list_events(thread_id)
         ]
+
+    def _record_thread_snapshot(
+        self,
+        response: WorkflowThreadResponse,
+        *,
+        actor: AuthenticatedUser | None,
+    ) -> None:
+        if self.thread_store is None:
+            return
+        self.thread_store.record_thread_snapshot(thread=response, actor=actor)

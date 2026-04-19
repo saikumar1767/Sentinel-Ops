@@ -6,7 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from ollama import RequestError, ResponseError
 from pydantic import ValidationError
 
-from app.dependencies import get_analyze_service, get_investigation_service
+from app.auth import AuthenticatedUser
+from app.dependencies import (
+    get_analyze_service,
+    get_investigation_service,
+    require_analyst_user,
+)
 from app.http_errors import raise_ollama_http_exception
 from app.schemas import (
     AnalyzeRequest,
@@ -37,8 +42,10 @@ router = APIRouter(tags=["analysis"])
 )
 def analyze(
     request: AnalyzeRequest,
+    current_user: AuthenticatedUser = Depends(require_analyst_user),
     service: AnalyzeService = Depends(get_analyze_service),
 ) -> AnalyzeResponse:
+    del current_user
     try:
         return service.analyze(request)
     except ValidationError as exc:
@@ -68,8 +75,10 @@ def analyze(
 )
 def investigate(
     request: InvestigateRequest,
+    current_user: AuthenticatedUser = Depends(require_analyst_user),
     service: InvestigationService = Depends(get_investigation_service),
 ) -> InvestigateResponse:
+    del current_user
     try:
         return service.investigate(request)
     except ValidationError as exc:

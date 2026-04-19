@@ -25,9 +25,11 @@ RUN groupadd --system sentinelops \
 
 COPY --from=builder /app/.venv /app/.venv
 COPY app ./app
+COPY config ./config
 COPY data ./data
 COPY scripts ./scripts
 COPY .env.example ./.env.example
+COPY LICENSE ./LICENSE
 
 RUN mkdir -p /app/data/runtime /tmp/sentinelops \
     && chown -R sentinelops:sentinelops /app /tmp/sentinelops

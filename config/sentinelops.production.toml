@@ -1,0 +1,39 @@
+app_name = "SentinelOps"
+app_version = "0.6.0"
+deployment_mode = "production"
+public_base_url = "https://sentinelops.example.internal"
+log_level = "INFO"
+startup_validate_config = true
+
+telemetry_enabled = true
+telemetry_service_name = "sentinelops-api"
+telemetry_exporter = "otlp"
+telemetry_otlp_endpoint = "https://otel.example.internal/v1/traces"
+
+analyze_model = "mistral:7b-instruct"
+investigate_model = "mistral:7b-instruct"
+embedding_model = "nomic-embed-text"
+model_license_policy = "permissive_only"
+commercially_reviewed_model_prefixes = ["mistral", "ministral", "nomic-embed-text"]
+
+knowledge_store_backend = "simple"
+knowledge_collection_name = "sentinelops_knowledge"
+knowledge_auto_ingest = true
+retrieval_top_k = 4
+
+workflow_recent_threads_limit = 50
+persisted_incident_limit = 250
+
+auth_mode = "oidc"
+auth_role_claim_path = "realm_access.roles"
+auth_analyst_roles = ["analyst", "approver", "admin"]
+auth_approver_roles = ["approver", "admin"]
+auth_admin_roles = ["admin"]
+
+# Secrets and environment-specific values must come from env vars or secret mounts:
+# SENTINELOPS_OLLAMA_HOST
+# SENTINELOPS_AUTH_OIDC_ISSUER_URL
+# SENTINELOPS_AUTH_OIDC_AUDIENCE
+# SENTINELOPS_AUTH_OIDC_JWKS_URL
+# SENTINELOPS_METADATA_DATABASE_URL
+# SENTINELOPS_WORKFLOW_CHECKPOINT_DATABASE_URL

@@ -5,12 +5,14 @@ from ollama import RequestError
 
 from app.dependencies import (
     get_analyze_service,
+    get_authentication_service,
     get_knowledge_base_service,
     get_ollama_gateway,
     get_runtime_metrics,
     get_settings,
     get_workflow_service,
     get_workflow_audit_trail,
+    get_workflow_thread_store,
 )
 from app.main import app
 from app.ollama_client import OllamaGateway
@@ -147,10 +149,12 @@ class StubWorkflowService:
 
 def reset_singletons() -> None:
     get_settings.cache_clear()
+    get_authentication_service.cache_clear()
     get_ollama_gateway.cache_clear()
     get_knowledge_base_service.cache_clear()
     get_runtime_metrics.cache_clear()
     get_workflow_audit_trail.cache_clear()
+    get_workflow_thread_store.cache_clear()
     app.openapi_schema = None
 
 
@@ -206,6 +210,90 @@ def test_openapi_does_not_advertise_security_schemes() -> None:
     assert ready_responses["503"]["content"]["application/json"]["schema"]["$ref"].endswith(
         "/ReadinessResponse"
     )
+
+
+def test_auth_enabled_routes_require_identity_and_admin_for_metrics(monkeypatch) -> None:
+    reset_singletons()
+    monkeypatch.setenv("SENTINELOPS_AUTH_MODE", "api_key")
+    monkeypatch.setenv(
+        "SENTINELOPS_AUTH_BEARER_TOKENS",
+        json.dumps(
+            {
+                "analyst-token": {
+                    "subject": "analyst-1",
+                    "email": "analyst@example.com",
+                    "name": "Analyst One",
+                    "roles": ["analyst"],
+                },
+                "admin-token": {
+                    "subject": "admin-1",
+                    "email": "admin@example.com",
+                    "name": "Admin One",
+                    "roles": ["admin"],
+                },
+            }
+        ),
+    )
+    reset_singletons()
+    app.dependency_overrides[get_analyze_service] = lambda: StubAnalyzeService()
+    client = TestClient(app)
+
+    try:
+        unauthorized = client.post(
+            "/analyze",
+            json={"log_text": "2026-04-06 09:10:22 ERROR database connection timeout after 30 seconds"},
+        )
+        health = client.get("/health")
+        authorized = client.post(
+            "/analyze",
+            headers={"Authorization": "Bearer analyst-token"},
+            json={"log_text": "2026-04-06 09:10:22 ERROR database connection timeout after 30 seconds"},
+        )
+        me = client.get("/me", headers={"Authorization": "Bearer analyst-token"})
+        forbidden_metrics = client.get("/metrics", headers={"Authorization": "Bearer analyst-token"})
+        admin_metrics = client.get("/metrics", headers={"Authorization": "Bearer admin-token"})
+    finally:
+        app.dependency_overrides.clear()
+        reset_singletons()
+
+    assert unauthorized.status_code == 401
+    assert health.status_code == 200
+    assert authorized.status_code == 200
+    assert me.status_code == 200
+    assert me.json()["subject"] == "analyst-1"
+    assert me.json()["roles"] == ["analyst"]
+    assert forbidden_metrics.status_code == 403
+    assert admin_metrics.status_code == 200
+
+
+def test_openapi_advertises_security_schemes_when_auth_is_enabled(monkeypatch) -> None:
+    reset_singletons()
+    monkeypatch.setenv("SENTINELOPS_AUTH_MODE", "api_key")
+    monkeypatch.setenv(
+        "SENTINELOPS_AUTH_BEARER_TOKENS",
+        json.dumps(
+            {
+                "analyst-token": {
+                    "subject": "analyst-1",
+                    "roles": ["analyst"],
+                }
+            }
+        ),
+    )
+    reset_singletons()
+    client = TestClient(app)
+
+    try:
+        openapi = client.get("/openapi.json").json()
+    finally:
+        reset_singletons()
+
+    security_schemes = openapi["components"]["securitySchemes"]
+    assert "SentinelOpsApiKey" in security_schemes
+    assert "SentinelOpsBearer" in security_schemes
+    assert openapi["paths"]["/analyze"]["post"]["security"]
+    assert "security" not in openapi["paths"]["/health"]["get"]
+    assert openapi["paths"]["/me"]["get"]["security"]
 
 
 def test_request_validation_errors_use_problem_details() -> None:
@@ -323,6 +411,90 @@ def test_validate_settings_requires_otlp_endpoint_when_enabled() -> None:
         assert False, "validate_settings should raise for missing OTLP endpoint"
     except RuntimeError as exc:
         assert "telemetry_otlp_endpoint" in str(exc)
+
+
+def test_validate_settings_requires_auth_credentials_for_api_key_mode() -> None:
+    settings = Settings(
+        auth_mode="api_key",
+        auth_api_key=None,
+        auth_bearer_tokens={},
+    )
+
+    try:
+        validate_settings(settings)
+        assert False, "validate_settings should raise when auth_mode=api_key has no credentials"
+    except RuntimeError as exc:
+        assert "auth_api_key" in str(exc)
+
+
+def test_validate_settings_requires_oidc_issuer_for_oidc_mode() -> None:
+    settings = Settings(
+        auth_mode="oidc",
+        auth_oidc_issuer_url=None,
+    )
+
+    try:
+        validate_settings(settings)
+        assert False, "validate_settings should raise when auth_mode=oidc has no issuer"
+    except RuntimeError as exc:
+        assert "auth_oidc_issuer_url" in str(exc)
+
+
+def test_effective_workflow_checkpoint_database_url_defaults_to_sqlite_path() -> None:
+    settings = Settings(workflow_checkpoint_path=Settings().workflow_checkpoint_path)
+    assert settings.effective_workflow_checkpoint_database_url.startswith("sqlite:///")
+
+
+def test_effective_workflow_checkpoint_database_url_prefers_metadata_database_url() -> None:
+    settings = Settings(
+        metadata_database_url="postgresql+pg8000://sentinelops:secret@db.internal:5432/sentinelops",
+    )
+    assert settings.effective_workflow_checkpoint_database_url == settings.metadata_database_url
+
+
+def test_validate_settings_rejects_non_reviewed_models_under_default_license_policy() -> None:
+    settings = Settings(
+        analyze_model="llama3.2",
+        investigate_model="mistral:7b-instruct",
+        embedding_model="nomic-embed-text",
+        model_license_policy="permissive_only",
+    )
+
+    try:
+        validate_settings(settings)
+        assert False, "validate_settings should reject models outside the reviewed default policy"
+    except RuntimeError as exc:
+        assert "analyze_model" in str(exc)
+
+
+def test_validate_settings_requires_stricter_contract_in_production_mode() -> None:
+    settings = Settings(
+        deployment_mode="production",
+        auth_mode="disabled",
+        telemetry_exporter="none",
+    )
+
+    try:
+        validate_settings(settings)
+        assert False, "validate_settings should reject incomplete production settings"
+    except RuntimeError as exc:
+        assert "auth_mode" in str(exc)
+
+
+def test_validate_settings_accepts_hardened_production_profile() -> None:
+    settings = Settings(
+        deployment_mode="production",
+        public_base_url="https://sentinelops.example.internal",
+        auth_mode="oidc",
+        auth_oidc_issuer_url="https://id.example.internal/realms/sentinelops",
+        auth_oidc_audience="sentinelops-api",
+        telemetry_exporter="otlp",
+        telemetry_otlp_endpoint="https://otel.example.internal/v1/traces",
+        metadata_database_url="postgresql+pg8000://sentinelops:secret@db.internal:5432/sentinelops",
+        workflow_checkpoint_database_url="postgresql://sentinelops:secret@db.internal:5432/sentinelops?sslmode=require",
+    )
+
+    validate_settings(settings)
 
 
 def test_ollama_gateway_wraps_connection_errors_as_request_errors() -> None:

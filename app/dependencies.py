@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, Request, status
 
 from app.audit import WorkflowAuditTrail
+from app.auth import AuthenticatedUser, AuthenticationService
+from app.metadata_store import WorkflowThreadStore
 from app.ollama_client import OllamaGateway
 from app.rag.chunker import MarkdownChunker
 from app.rag.loader import KnowledgeDocumentLoader
@@ -34,8 +36,18 @@ def get_runtime_metrics() -> RuntimeMetrics:
 
 
 @lru_cache
+def get_authentication_service() -> AuthenticationService:
+    return AuthenticationService(get_settings())
+
+
+@lru_cache
 def get_workflow_audit_trail() -> WorkflowAuditTrail:
     return WorkflowAuditTrail(get_settings())
+
+
+@lru_cache
+def get_workflow_thread_store() -> WorkflowThreadStore:
+    return WorkflowThreadStore(get_settings())
 
 
 @lru_cache
@@ -64,6 +76,46 @@ def get_tool_registry(settings: Settings = Depends(get_settings)) -> ToolRegistr
     file_tools = FileTools(settings)
     incident_tools = IncidentTools(settings)
     return ToolRegistry(file_tools=file_tools, incident_tools=incident_tools, settings=settings)
+
+
+def get_current_user(
+    request: Request,
+    auth_service: AuthenticationService = Depends(get_authentication_service),
+) -> AuthenticatedUser:
+    user = auth_service.authenticate_request(request)
+    request.state.current_user = user
+    return user
+
+
+def _forbidden(detail: str) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
+def require_analyst_user(
+    user: AuthenticatedUser = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> AuthenticatedUser:
+    if not user.has_any_role(settings.auth_analyst_roles):
+        raise _forbidden("Analyst access is required for this operation.")
+    return user
+
+
+def require_approver_user(
+    user: AuthenticatedUser = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> AuthenticatedUser:
+    if not user.has_any_role(settings.auth_approver_roles):
+        raise _forbidden("Approver access is required for this operation.")
+    return user
+
+
+def require_admin_user(
+    user: AuthenticatedUser = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> AuthenticatedUser:
+    if not user.has_any_role(settings.auth_admin_roles):
+        raise _forbidden("Admin access is required for this operation.")
+    return user
 
 
 def get_runtime_health_service(
@@ -112,6 +164,7 @@ def get_workflow_service(
     gateway: OllamaGateway = Depends(get_ollama_gateway),
     tool_registry: ToolRegistry = Depends(get_tool_registry),
     retriever: KnowledgeBaseService = Depends(get_knowledge_base_service),
+    thread_store: WorkflowThreadStore = Depends(get_workflow_thread_store),
 ):
     service = WorkflowService(
         settings=settings,
@@ -119,6 +172,7 @@ def get_workflow_service(
         tool_registry=tool_registry,
         retriever=retriever,
         audit_trail=get_workflow_audit_trail(),
+        thread_store=thread_store,
     )
     try:
         yield service

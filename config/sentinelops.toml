@@ -1,0 +1,54 @@
+app_name = "SentinelOps"
+app_version = "0.6.0"
+deployment_mode = "local"
+log_level = "INFO"
+startup_validate_config = true
+
+telemetry_enabled = false
+telemetry_service_name = "sentinelops-api"
+telemetry_exporter = "none"
+
+analyze_model = "mistral:7b-instruct"
+investigate_model = "mistral:7b-instruct"
+embedding_model = "nomic-embed-text"
+model_license_policy = "permissive_only"
+ollama_host = "http://localhost:11434"
+ollama_timeout_seconds = 120
+ollama_max_retries = 2
+ollama_retry_backoff_seconds = 0.35
+ollama_cache_enabled = true
+ollama_cache_ttl_seconds = 900
+ollama_cache_max_entries = 256
+
+knowledge_store_backend = "simple"
+knowledge_collection_name = "sentinelops_knowledge"
+knowledge_auto_ingest = true
+retrieval_top_k = 4
+retrieval_snippet_chars = 260
+chunk_target_chars = 900
+chunk_overlap_chars = 120
+embedding_batch_size = 16
+retrieval_cache_enabled = true
+retrieval_cache_ttl_seconds = 900
+retrieval_cache_max_entries = 256
+
+console_timeline_limit = 12
+workflow_recent_threads_limit = 25
+persisted_incident_limit = 100
+
+auth_mode = "disabled"
+auth_api_key_header_name = "X-API-Key"
+auth_role_claim_path = "realm_access.roles"
+auth_analyst_roles = ["analyst", "approver", "admin"]
+auth_approver_roles = ["approver", "admin"]
+auth_admin_roles = ["admin"]
+commercially_reviewed_model_prefixes = ["mistral", "ministral", "nomic-embed-text"]
+
+# Supply secrets through environment variables or mounted secret files:
+# SENTINELOPS_PUBLIC_BASE_URL
+# SENTINELOPS_AUTH_API_KEY
+# SENTINELOPS_AUTH_BEARER_TOKENS
+# SENTINELOPS_AUTH_OIDC_ISSUER_URL
+# SENTINELOPS_AUTH_OIDC_AUDIENCE
+# SENTINELOPS_METADATA_DATABASE_URL
+# SENTINELOPS_WORKFLOW_CHECKPOINT_DATABASE_URL

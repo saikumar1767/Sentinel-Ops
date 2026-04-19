@@ -6,7 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from ollama import RequestError, ResponseError
 from pydantic import ValidationError
 
-from app.dependencies import get_knowledge_base_service
+from app.auth import AuthenticatedUser
+from app.dependencies import (
+    get_knowledge_base_service,
+    require_admin_user,
+    require_analyst_user,
+)
 from app.http_errors import raise_ollama_http_exception
 from app.rag.service import KnowledgeBaseService
 from app.rag.utils import curate_knowledge_search_hits
@@ -34,8 +39,10 @@ router = APIRouter(tags=["knowledge"])
 )
 def ingest_knowledge(
     request: KnowledgeIngestRequest,
+    current_user: AuthenticatedUser = Depends(require_admin_user),
     service: KnowledgeBaseService = Depends(get_knowledge_base_service),
 ) -> KnowledgeIngestResponse:
+    del current_user
     if request.reset and not request.confirm_reset:
         raise HTTPException(status_code=400, detail="Destructive reset requires confirm_reset=true.")
     try:
@@ -61,8 +68,10 @@ def ingest_knowledge(
 )
 def search_knowledge(
     request: KnowledgeSearchRequest,
+    current_user: AuthenticatedUser = Depends(require_analyst_user),
     service: KnowledgeBaseService = Depends(get_knowledge_base_service),
 ) -> KnowledgeSearchResponse:
+    del current_user
     try:
         candidate_results = service.search(
             query=request.query,

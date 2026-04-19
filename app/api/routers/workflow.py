@@ -2,20 +2,29 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Body, Depends, Path, Request
+from fastapi import APIRouter, Body, Depends, Path, Query, Request
 from fastapi.responses import JSONResponse
 from ollama import RequestError, ResponseError
 from pydantic import ValidationError
 
-from app.dependencies import get_workflow_service
+from app.auth import AuthenticatedUser
+from app.dependencies import (
+    get_workflow_service,
+    require_admin_user,
+    require_analyst_user,
+    require_approver_user,
+)
 from app.http_errors import ollama_error_detail, problem_response, safe_detail
 from app.schemas import (
+    IncidentType,
     ProblemDetailResponse,
     WorkflowApproveRequest,
     WorkflowAuditResponse,
     WorkflowInvestigateRequest,
     WorkflowRejectRequest,
     WorkflowResumeRequest,
+    WorkflowStatus,
+    WorkflowThreadListResponse,
     WorkflowThreadResponse,
 )
 from app.services.workflow_service import WorkflowService
@@ -37,10 +46,11 @@ router = APIRouter(tags=["workflow"])
 def workflow_investigate(
     request_context: Request,
     request: WorkflowInvestigateRequest = Body(...),
+    current_user: AuthenticatedUser = Depends(require_analyst_user),
     service: WorkflowService = Depends(get_workflow_service),
 ) -> WorkflowThreadResponse | JSONResponse:
     try:
-        return service.start_investigation(request)
+        return service.start_investigation(request, actor=current_user)
     except ValueError as exc:
         return problem_response(
             request=request_context,
@@ -81,6 +91,22 @@ def workflow_investigate(
 
 
 @router.get(
+    "/workflow/threads",
+    response_model=WorkflowThreadListResponse,
+    summary="List recent workflow threads",
+)
+def list_workflow_threads(
+    limit: int | None = Query(default=None, ge=1, le=100),
+    status: WorkflowStatus | None = Query(default=None),
+    incident_type: IncidentType | None = Query(default=None),
+    current_user: AuthenticatedUser = Depends(require_analyst_user),
+    service: WorkflowService = Depends(get_workflow_service),
+) -> WorkflowThreadListResponse:
+    del current_user
+    return service.list_threads(limit=limit, status=status, incident_type=incident_type)
+
+
+@router.get(
     "/workflow/{thread_id}",
     response_model=WorkflowThreadResponse,
     responses={404: {"model": ProblemDetailResponse}},
@@ -89,8 +115,10 @@ def workflow_investigate(
 def get_workflow_thread(
     request_context: Request,
     thread_id: str = Path(..., min_length=1, max_length=120),
+    current_user: AuthenticatedUser = Depends(require_analyst_user),
     service: WorkflowService = Depends(get_workflow_service),
 ) -> WorkflowThreadResponse | JSONResponse:
+    del current_user
     try:
         return service.get_thread(thread_id)
     except KeyError as exc:
@@ -113,8 +141,10 @@ def get_workflow_thread(
 def get_workflow_audit(
     request_context: Request,
     thread_id: str = Path(..., min_length=1, max_length=120),
+    current_user: AuthenticatedUser = Depends(require_admin_user),
     service: WorkflowService = Depends(get_workflow_service),
 ) -> WorkflowAuditResponse | JSONResponse:
+    del current_user
     try:
         return service.audit_report(thread_id)
     except KeyError as exc:
@@ -143,10 +173,11 @@ def resume_workflow_thread(
     request_context: Request,
     request: WorkflowResumeRequest = Body(...),
     thread_id: str = Path(..., min_length=1, max_length=120),
+    current_user: AuthenticatedUser = Depends(require_approver_user),
     service: WorkflowService = Depends(get_workflow_service),
 ) -> WorkflowThreadResponse | JSONResponse:
     try:
-        return service.resume(thread_id, request)
+        return service.resume(thread_id, request, actor=current_user)
     except KeyError as exc:
         return _thread_problem(request_context, 404, "workflow_thread_not_found", "Workflow thread not found", exc, thread_id)
     except RuntimeError as exc:
@@ -196,10 +227,11 @@ def approve_workflow_thread(
     request_context: Request,
     request: WorkflowApproveRequest = Body(...),
     thread_id: str = Path(..., min_length=1, max_length=120),
+    current_user: AuthenticatedUser = Depends(require_approver_user),
     service: WorkflowService = Depends(get_workflow_service),
 ) -> WorkflowThreadResponse | JSONResponse:
     try:
-        return service.approve(thread_id, request)
+        return service.approve(thread_id, request, actor=current_user)
     except KeyError as exc:
         return _thread_problem(request_context, 404, "workflow_thread_not_found", "Workflow thread not found", exc, thread_id)
     except RuntimeError as exc:
@@ -249,10 +281,11 @@ def reject_workflow_thread(
     request_context: Request,
     request: WorkflowRejectRequest = Body(...),
     thread_id: str = Path(..., min_length=1, max_length=120),
+    current_user: AuthenticatedUser = Depends(require_approver_user),
     service: WorkflowService = Depends(get_workflow_service),
 ) -> WorkflowThreadResponse | JSONResponse:
     try:
-        return service.reject(thread_id, request)
+        return service.reject(thread_id, request, actor=current_user)
     except KeyError as exc:
         return _thread_problem(request_context, 404, "workflow_thread_not_found", "Workflow thread not found", exc, thread_id)
     except RuntimeError as exc:

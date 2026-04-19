@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from app.audit import WorkflowAuditTrail
 from app.dependencies import get_workflow_service
 from app.main import app
+from app.metadata_store import WorkflowThreadStore
 from app.ollama_client import ChatTurn, ToolCallSpec
 from app.schemas import RetrievalHit
 from app.services.workflow_service import WorkflowService
@@ -142,6 +143,7 @@ def build_workflow_service(tmp_path, *, gateway=None, retriever=None, audit_trai
         incident_templates_dir=PROJECT_ROOT / "data" / "incident_templates",
         incident_history_dir=history_dir,
         workflow_checkpoint_path=tmp_path / "workflow" / "checkpoints.sqlite",
+        audit_db_path=tmp_path / "audit" / "audit.sqlite",
     )
     registry = ToolRegistry(
         file_tools=FileTools(settings),
@@ -154,6 +156,7 @@ def build_workflow_service(tmp_path, *, gateway=None, retriever=None, audit_trai
         tool_registry=registry,
         retriever=retriever or StubRetriever(),
         audit_trail=audit_trail,
+        thread_store=WorkflowThreadStore(settings),
     )
 
 
@@ -527,6 +530,9 @@ def test_workflow_audit_trail_records_approval_events(tmp_path) -> None:
     assert event["decision"] == "approved"
     assert event["action"] == "approve"
     assert event["review_notes"] == "Approved by incident manager."
+    assert event["actor_subject"] == "local-operator"
+    assert event["actor_name"] == "Local Operator"
+    assert event["actor_roles"] == ["admin"]
 
 
 def test_workflow_audit_trail_records_reject_event(tmp_path) -> None:
@@ -566,6 +572,56 @@ def test_workflow_audit_trail_records_reject_event(tmp_path) -> None:
     assert event["decision"] == "rejected"
     assert event["action"] == "reject"
     assert event["review_notes"] == "Rejected during anonymous audit coverage."
+    assert event["actor_subject"] == "local-operator"
+    assert event["actor_roles"] == ["admin"]
+
+
+def test_workflow_thread_history_lists_recent_threads(tmp_path) -> None:
+    service = build_workflow_service(tmp_path)
+    app.dependency_overrides[get_workflow_service] = lambda: service
+    client = TestClient(app)
+
+    try:
+        first = client.post(
+            "/workflow/investigate",
+            json={
+                "thread_id": "workflow-history-one",
+                "prompt": "Investigate this incident using the failing run and the previous healthy run.",
+                "candidate_log_paths": [
+                    "data/logs/database-current.log",
+                    "data/logs/database-previous.log",
+                ],
+                "incident_type_hint": "database",
+            },
+        )
+        second = client.post(
+            "/workflow/investigate",
+            json={
+                "thread_id": "workflow-history-two",
+                "prompt": "Investigate this incident without approval.",
+                "candidate_log_paths": [
+                    "data/logs/database-current.log",
+                    "data/logs/database-previous.log",
+                ],
+                "incident_type_hint": "database",
+                "require_approval_for_remediation": False,
+            },
+        )
+        history = client.get("/workflow/threads", params={"limit": 2})
+    finally:
+        app.dependency_overrides.clear()
+        service.close()
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert history.status_code == 200
+    payload = history.json()
+    assert payload["total_threads"] == 2
+    thread_ids = {item["thread_id"] for item in payload["threads"]}
+    assert {"workflow-history-one", "workflow-history-two"} == thread_ids
+    first_item = payload["threads"][0]
+    assert first_item["actor_subject"] == "local-operator"
+    assert first_item["actor_roles"] == ["admin"]
 
 
 def test_workflow_swagger_docs_document_problem_responses_and_examples(tmp_path) -> None:
