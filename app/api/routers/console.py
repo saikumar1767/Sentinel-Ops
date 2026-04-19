@@ -3,7 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Path as FastAPIPath, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
-from app.dependencies import get_console_service
+from app.auth import AuthenticatedUser
+from app.dependencies import get_console_service, require_analyst_user
 from app.http_errors import problem_response, safe_detail
 from app.schemas import (
     ConsoleOverviewResponse,
@@ -25,7 +26,10 @@ def root_redirect() -> RedirectResponse:
 
 
 @router.get("/console", include_in_schema=False)
-def console_dashboard() -> FileResponse:
+def console_dashboard(
+    current_user: AuthenticatedUser = Depends(require_analyst_user),
+) -> FileResponse:
+    del current_user
     return FileResponse(_CONSOLE_HTML_PATH)
 
 
@@ -39,8 +43,10 @@ def console_dashboard() -> FileResponse:
     ),
 )
 def console_overview(
+    current_user: AuthenticatedUser = Depends(require_analyst_user),
     service: ConsoleService = Depends(get_console_service),
 ) -> ConsoleOverviewResponse:
+    del current_user
     return service.overview()
 
 
@@ -54,8 +60,10 @@ def console_overview(
     ),
 )
 def list_console_incidents(
+    current_user: AuthenticatedUser = Depends(require_analyst_user),
     service: ConsoleService = Depends(get_console_service),
 ) -> IncidentLibraryResponse:
+    del current_user
     return service.list_incidents()
 
 
@@ -68,8 +76,10 @@ def list_console_incidents(
 def get_console_incident(
     request_context: Request,
     incident_id: str = FastAPIPath(..., min_length=1, max_length=120),
+    current_user: AuthenticatedUser = Depends(require_analyst_user),
     service: ConsoleService = Depends(get_console_service),
 ) -> IncidentProfileResponse | JSONResponse:
+    del current_user
     try:
         return service.get_incident(incident_id)
     except KeyError as exc:
@@ -92,6 +102,8 @@ def get_console_incident(
     ),
 )
 def get_console_timeline(
+    current_user: AuthenticatedUser = Depends(require_analyst_user),
     service: ConsoleService = Depends(get_console_service),
 ) -> ConsoleTimelineResponse:
+    del current_user
     return service.timeline()

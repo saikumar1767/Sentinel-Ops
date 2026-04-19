@@ -1,21 +1,35 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
 [project]
 name = "sentinel-ops"
 version = "0.6.0"
 requires-python = ">=3.11"
+description = "Plug-and-play incident copilot with local and enterprise deployment profiles."
+readme = "README.md"
 dependencies = [
     "chromadb>=1.5.5",
     "fastapi>=0.135.2",
     "langgraph>=1.1.6",
+    "langgraph-checkpoint-postgres>=3.0.1",
     "langgraph-checkpoint-sqlite>=3.0.3",
     "ollama>=0.6.1",
     "opentelemetry-exporter-otlp-proto-http>=1.38.0",
     "opentelemetry-instrumentation-fastapi>=0.59b0",
     "opentelemetry-sdk>=1.38.0",
+    "pg8000>=1.31.5",
     "pydantic-settings>=2.13.1",
+    "psycopg[binary,pool]>=3.2.9",
+    "PyJWT[crypto]>=2.10.1",
     "python-dotenv>=1.2.2",
     "requests>=2.33.0",
+    "SQLAlchemy>=2.0.39",
     "uvicorn[standard]>=0.42.0",
 ]
+
+[project.scripts]
+sentinelops = "app.cli:main"
 
 [dependency-groups]
 dev = [
@@ -26,4 +40,36 @@ dev = [
 [tool.pytest.ini_options]
 markers = [
     "integration: exercises live dependencies such as Ollama and Chroma when explicitly enabled",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"config" = "app/_bundled/config"
+"data/incident_library" = "app/_bundled/data/incident_library"
+"data/incident_templates" = "app/_bundled/data/incident_templates"
+"data/knowledge" = "app/_bundled/data/knowledge"
+"data/logs" = "app/_bundled/data/logs"
+"data/reference_incidents" = "app/_bundled/data/reference_incidents"
+"samples" = "app/_bundled/samples"
+"LICENSE" = "app/_bundled/LICENSE"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/app",
+    "/config",
+    "/data/incident_library",
+    "/data/incident_templates",
+    "/data/knowledge",
+    "/data/logs",
+    "/data/reference_incidents",
+    "/samples",
+    "/scripts",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+    "/SECURITY.md",
+    "/compose.yaml",
+    "/compose.production.yaml",
 ]

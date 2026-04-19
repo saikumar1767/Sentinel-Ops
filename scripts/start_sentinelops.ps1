@@ -21,13 +21,18 @@ try {
   Write-Warning "Ollama did not respond at $ollamaHost. Start 'ollama serve' in another window if the app cannot answer model requests."
 }
 
-& (Join-Path $PSScriptRoot "start_chroma_wsl.ps1")
+$knowledgeBackend = if ($env:SENTINELOPS_KNOWLEDGE_STORE_BACKEND) { $env:SENTINELOPS_KNOWLEDGE_STORE_BACKEND } else { "simple" }
+if ($knowledgeBackend -eq "chroma") {
+  & (Join-Path $PSScriptRoot "start_chroma_wsl.ps1")
+} else {
+  Write-Host "Knowledge backend is '$knowledgeBackend'; skipping Chroma startup."
+}
 
 $listener = Get-NetTCPConnection -LocalPort $appPort -State Listen -ErrorAction SilentlyContinue
 if ($listener) {
   Write-Host "SentinelOps is already listening on port $appPort."
 } else {
-  $serveCommand = "Set-Location '$projectRoot'; uv run uvicorn app.main:app --host $appHost --port $appPort"
+  $serveCommand = "Set-Location '$projectRoot'; uv run sentinelops start --host $appHost --port $appPort"
   Write-Host "Launching FastAPI in a new PowerShell window..."
   Start-Process powershell.exe -ArgumentList "-NoExit", "-Command", $serveCommand | Out-Null
 }

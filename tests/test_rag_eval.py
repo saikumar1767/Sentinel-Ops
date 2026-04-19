@@ -252,12 +252,12 @@ class MissingEmbeddingModelKnowledgeService:
 
     def rebuild_index(self, *, reset: bool = True):
         raise RuntimeError(
-            "Ollama embedding model 'embeddinggemma' is not installed. Pull it first with: ollama pull embeddinggemma"
+            "Ollama embedding model 'nomic-embed-text' is not installed. Pull it first with: ollama pull nomic-embed-text"
         )
 
     def search(self, *, query: str, top_k: int, document_types=None, incident_type_hint=None):
         raise RuntimeError(
-            "Ollama embedding model 'embeddinggemma' is not installed. Pull it first with: ollama pull embeddinggemma"
+            "Ollama embedding model 'nomic-embed-text' is not installed. Pull it first with: ollama pull nomic-embed-text"
         )
 
 

@@ -3,9 +3,16 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
-from app.dependencies import get_runtime_health_service, get_runtime_metrics, get_settings
+from app.auth import AuthenticatedUser
+from app.dependencies import (
+    get_current_user,
+    get_runtime_health_service,
+    get_runtime_metrics,
+    get_settings,
+    require_admin_user,
+)
 from app.runtime_metrics import RuntimeMetrics
-from app.schemas import LivenessResponse, MetricsResponse, ReadinessResponse
+from app.schemas import CurrentUserResponse, LivenessResponse, MetricsResponse, ReadinessResponse
 from app.services.runtime_health_service import RuntimeHealthService
 from app.settings import Settings
 
@@ -66,12 +73,25 @@ def ready_strict(
 
 
 @router.get(
+    "/me",
+    response_model=CurrentUserResponse,
+    summary="Read the authenticated SentinelOps user",
+)
+def me(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> CurrentUserResponse:
+    return CurrentUserResponse(**current_user.model_dump())
+
+
+@router.get(
     "/metrics",
     response_model=MetricsResponse,
     summary="Runtime metrics for requests, models, and caches",
 )
 def metrics(
+    current_user: AuthenticatedUser = Depends(require_admin_user),
     runtime_metrics: RuntimeMetrics = Depends(get_runtime_metrics),
     settings: Settings = Depends(get_settings),
 ) -> MetricsResponse:
+    del current_user
     return runtime_metrics.snapshot(settings)

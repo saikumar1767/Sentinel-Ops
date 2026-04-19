@@ -38,9 +38,9 @@ def test_live_ollama_and_chroma_roundtrip() -> None:
         chroma_ssl=os.getenv("SENTINELOPS_LIVE_CHROMA_SSL", "false").lower() == "true",
         knowledge_collection_name=collection_name,
         knowledge_auto_ingest=False,
-        analyze_model=os.getenv("SENTINELOPS_LIVE_CHAT_MODEL", "llama3.2"),
-        investigate_model=os.getenv("SENTINELOPS_LIVE_CHAT_MODEL", "llama3.2"),
-        embedding_model=os.getenv("SENTINELOPS_LIVE_EMBED_MODEL", "embeddinggemma"),
+        analyze_model=os.getenv("SENTINELOPS_LIVE_CHAT_MODEL", "mistral:7b-instruct"),
+        investigate_model=os.getenv("SENTINELOPS_LIVE_CHAT_MODEL", "mistral:7b-instruct"),
+        embedding_model=os.getenv("SENTINELOPS_LIVE_EMBED_MODEL", "nomic-embed-text"),
     )
 
     gateway = OllamaGateway(settings)

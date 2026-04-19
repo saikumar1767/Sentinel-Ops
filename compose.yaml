@@ -3,19 +3,33 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    depends_on:
+      sentinelops-postgres:
+        condition: service_healthy
+      sentinelops-keycloak:
+        condition: service_started
     ports:
       - "8000:8000"
     environment:
+      SENTINELOPS_CONFIG_FILE: /app/config/sentinelops.toml
+      SENTINELOPS_DEPLOYMENT_MODE: ${SENTINELOPS_DEPLOYMENT_MODE:-local}
+      SENTINELOPS_PUBLIC_BASE_URL: ${SENTINELOPS_PUBLIC_BASE_URL:-}
       SENTINELOPS_OLLAMA_HOST: ${SENTINELOPS_OLLAMA_HOST:-http://host.docker.internal:11434}
       SENTINELOPS_CHROMA_HOST: ${SENTINELOPS_CHROMA_HOST:-host.docker.internal}
       SENTINELOPS_CHROMA_PORT: ${SENTINELOPS_CHROMA_PORT:-8012}
+      SENTINELOPS_METADATA_DATABASE_URL: ${SENTINELOPS_METADATA_DATABASE_URL:-postgresql+pg8000://sentinelops:sentinelops@sentinelops-postgres:5432/sentinelops}
+      SENTINELOPS_WORKFLOW_CHECKPOINT_DATABASE_URL: ${SENTINELOPS_WORKFLOW_CHECKPOINT_DATABASE_URL:-postgresql://sentinelops:sentinelops@sentinelops-postgres:5432/sentinelops?sslmode=disable}
       SENTINELOPS_AUTH_MODE: ${SENTINELOPS_AUTH_MODE:-disabled}
-      SENTINELOPS_API_KEY: ${SENTINELOPS_API_KEY:-}
-      SENTINELOPS_BEARER_TOKENS: ${SENTINELOPS_BEARER_TOKENS:-{}}
+      SENTINELOPS_AUTH_API_KEY: ${SENTINELOPS_AUTH_API_KEY:-}
+      SENTINELOPS_AUTH_BEARER_TOKENS: ${SENTINELOPS_AUTH_BEARER_TOKENS:-{}}
+      SENTINELOPS_AUTH_OIDC_ISSUER_URL: ${SENTINELOPS_AUTH_OIDC_ISSUER_URL:-http://sentinelops-keycloak:8080/realms/sentinelops}
+      SENTINELOPS_AUTH_OIDC_AUDIENCE: ${SENTINELOPS_AUTH_OIDC_AUDIENCE:-sentinelops-api}
+      SENTINELOPS_MODEL_LICENSE_POLICY: ${SENTINELOPS_MODEL_LICENSE_POLICY:-permissive_only}
       SENTINELOPS_LOG_LEVEL: ${SENTINELOPS_LOG_LEVEL:-INFO}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
+      - ./config:/app/config:ro
       - ./data/runtime:/app/data/runtime
     read_only: true
     tmpfs:
@@ -36,3 +50,40 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  sentinelops-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${SENTINELOPS_POSTGRES_DB:-sentinelops}
+      POSTGRES_USER: ${SENTINELOPS_POSTGRES_USER:-sentinelops}
+      POSTGRES_PASSWORD: ${SENTINELOPS_POSTGRES_PASSWORD:-sentinelops}
+    ports:
+      - "5432:5432"
+    volumes:
+      - sentinelops-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  sentinelops-keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    command: ["start-dev", "--http-port=8080"]
+    depends_on:
+      sentinelops-postgres:
+        condition: service_healthy
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${SENTINELOPS_KEYCLOAK_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${SENTINELOPS_KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL_HOST: sentinelops-postgres
+      KC_DB_URL_DATABASE: ${SENTINELOPS_POSTGRES_DB:-sentinelops}
+      KC_DB_USERNAME: ${SENTINELOPS_POSTGRES_USER:-sentinelops}
+      KC_DB_PASSWORD: ${SENTINELOPS_POSTGRES_PASSWORD:-sentinelops}
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8081:8080"
+
+volumes:
+  sentinelops-postgres:

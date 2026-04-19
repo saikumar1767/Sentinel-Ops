@@ -417,8 +417,12 @@ class WorkflowAuditEvent(BaseModel):
     edited_remediation_plan: list[str] = Field(default_factory=list, max_length=8)
     status_after: WorkflowStatus
     request_id: str | None = Field(default=None, max_length=120)
+    actor_subject: str | None = Field(default=None, max_length=160)
+    actor_email: str | None = Field(default=None, max_length=320)
+    actor_name: str | None = Field(default=None, max_length=160)
+    actor_roles: list[str] = Field(default_factory=list, max_length=12)
 
-    @field_validator("edited_remediation_plan")
+    @field_validator("edited_remediation_plan", "actor_roles")
     @classmethod
     def clean_audit_plan(cls, value: list[str]) -> list[str]:
         return _clean_string_list(value)
@@ -677,10 +681,55 @@ class ProblemDetailResponse(BaseModel):
     )
 
 
+class WorkflowThreadListItem(BaseModel):
+    thread_id: str = Field(min_length=1, max_length=120)
+    request_id: str = Field(min_length=1, max_length=120)
+    status: WorkflowStatus
+    current_stage: WorkflowStage
+    current_step: str = Field(min_length=1, max_length=120)
+    incident_type: IncidentType | None = None
+    severity: Severity | None = None
+    checkpoint_id: str | None = Field(default=None, max_length=120)
+    approval_required: bool = False
+    approval_status: ApprovalStatus = "not_required"
+    input_summary: str | None = Field(default=None, max_length=600)
+    manager_summary: str | None = Field(default=None, max_length=1200)
+    engineer_summary: str | None = Field(default=None, max_length=1200)
+    actor_subject: str | None = Field(default=None, max_length=160)
+    actor_email: str | None = Field(default=None, max_length=320)
+    actor_name: str | None = Field(default=None, max_length=160)
+    actor_roles: list[str] = Field(default_factory=list, max_length=12)
+    created_at: datetime
+    updated_at: datetime
+
+    @field_validator("actor_roles")
+    @classmethod
+    def clean_actor_roles(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)
+
+
+class WorkflowThreadListResponse(BaseModel):
+    total_threads: int = Field(ge=0)
+    threads: list[WorkflowThreadListItem] = Field(default_factory=list)
+
+
 class WorkflowAuditResponse(BaseModel):
     thread_id: str = Field(min_length=1, max_length=120)
     total_events: int = Field(ge=0)
     events: list[WorkflowAuditEvent] = Field(default_factory=list)
+
+
+class CurrentUserResponse(BaseModel):
+    subject: str = Field(min_length=1, max_length=160)
+    email: str | None = Field(default=None, max_length=320)
+    name: str | None = Field(default=None, max_length=160)
+    roles: list[str] = Field(default_factory=list, max_length=12)
+    auth_mode: Literal["disabled", "api_key", "oidc"]
+
+    @field_validator("roles")
+    @classmethod
+    def clean_roles(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)
 
 
 class IncidentExpectation(BaseModel):
@@ -1042,19 +1091,19 @@ class ReadinessResponse(BaseModel):
                 "dependencies": {
                     "ollama": {
                         "status": "degraded",
-                        "detail": "Ollama is reachable but some configured models are missing: embedding_model=embeddinggemma.",
+                        "detail": "Ollama is reachable but some configured models are missing: embedding_model=nomic-embed-text.",
                         "metadata": {
                             "endpoint": "http://localhost:11434/api/tags",
-                            "analyze_model": "llama3.2",
-                            "investigate_model": "llama3.2",
-                            "embedding_model": "embeddinggemma",
+                            "analyze_model": "mistral:7b-instruct",
+                            "investigate_model": "mistral:7b-instruct",
+                            "embedding_model": "nomic-embed-text",
                         },
                     },
                     "knowledge_store": {
                         "status": "unavailable",
                         "detail": "Knowledge retrieval is unavailable because the configured embedding model is not installed in Ollama.",
                         "metadata": {
-                            "backend": "chroma",
+                            "backend": "simple",
                             "collection": "sentinelops_knowledge",
                         },
                     },
@@ -1177,7 +1226,7 @@ class MetricsResponse(BaseModel):
                 "model_usage": [
                     {
                         "operation": "chat",
-                        "model": "llama3.2",
+                        "model": "mistral:7b-instruct",
                         "call_count": 6,
                         "cache_hit_count": 2,
                         "retry_count": 1,

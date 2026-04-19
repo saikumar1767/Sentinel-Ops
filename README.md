@@ -1,6 +1,30 @@
 SentinelOps
 
-SentinelOps is a edge-first incident copilot for log triage, grounded investigations, and approval-aware workflow execution. It combines FastAPI, Ollama, Chroma, safe local tools, and durable workflow checkpoints so an operator can move from raw evidence to a structured response quickly.
+SentinelOps is an edge-first incident copilot for log triage, grounded investigations, and approval-aware workflow execution. It combines FastAPI, Ollama, safe local tools, durable workflow checkpoints, shared workflow metadata, and optional OIDC auth so an operator can move from raw evidence to a structured response quickly.
+
+Install
+- Windows PowerShell:
+  `irm https://raw.githubusercontent.com/saikumar1767/Sentinel-Ops/main/scripts/install_sentinelops.ps1 | iex`
+- macOS / Linux:
+  `curl -fsSL https://raw.githubusercontent.com/saikumar1767/Sentinel-Ops/main/scripts/install_sentinelops.sh | bash`
+- Direct with `uv`:
+  `uv tool install --from git+https://github.com/saikumar1767/Sentinel-Ops.git sentinel-ops`
+
+Use
+- Start app:
+  `sentinelops`
+- Start without opening browser:
+  `sentinelops start --no-browser`
+- Validate environment:
+  `sentinelops doctor`
+- Show paths:
+  `sentinelops paths`
+
+Plug-and-play behavior
+- First run bootstraps `~/.sentinelops`
+- Starter config and product data are copied automatically
+- Console opens automatically when the API becomes healthy
+- Local profile works with one command; production profile is available with `sentinelops start --profile production`
 
 Core product surfaces
 - Operations console: `/console`
@@ -10,29 +34,59 @@ Core product surfaces
 - Fast analysis: `POST /analyze`
 - One-shot investigation: `POST /investigate`
 - Workflow investigation: `POST /workflow/investigate`
+- Workflow thread history: `GET /workflow/threads`
 - Evaluation summary: `/eval/summary`
+- Current user: `/me`
 - Metrics: `/metrics`
 
-Run locally
+Run from source repo
 1. Install dependencies:
    `uv sync`
 2. Pull the local models:
-   `ollama pull llama3.2`
-   `ollama pull embeddinggemma`
-3. Start everything:
-   `powershell -ExecutionPolicy Bypass -File scripts/start_sentinelops.ps1`
+   `ollama pull mistral:7b-instruct`
+   `ollama pull nomic-embed-text`
+3. Start from the repo:
+   `uv run sentinelops`
 4. Open:
    [http://127.0.0.1:8000/console](http://127.0.0.1:8000/console)
 
 Manual startup
 1. Start Ollama:
    `ollama serve`
-2. Start Chroma:
-   `powershell -ExecutionPolicy Bypass -File scripts/start_chroma_wsl.ps1`
-3. Start the API:
-   `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload`
-4. Open:
+2. Start the API:
+   `uv run sentinelops start --host 127.0.0.1 --port 8000 --reload`
+3. Open:
    [http://127.0.0.1:8000/console](http://127.0.0.1:8000/console)
+
+Shared company-style stack
+1. Keep Ollama running on the host:
+   `ollama serve`
+2. Start the shared infra:
+   `docker compose up --build sentinelops-postgres sentinelops-keycloak sentinelops-api`
+3. Switch auth on with env vars when you are ready:
+   `SENTINELOPS_AUTH_MODE=oidc`
+   `SENTINELOPS_AUTH_OIDC_ISSUER_URL=http://127.0.0.1:8081/realms/sentinelops`
+   `SENTINELOPS_AUTH_OIDC_AUDIENCE=sentinelops-api`
+
+Production-oriented compose profile
+1. Use the production config and override file:
+   `docker compose -f compose.yaml -f compose.production.yaml up --build sentinelops-api`
+2. Supply all required external URLs and secrets:
+   `SENTINELOPS_PUBLIC_BASE_URL`
+   `SENTINELOPS_METADATA_DATABASE_URL`
+   `SENTINELOPS_WORKFLOW_CHECKPOINT_DATABASE_URL`
+   `SENTINELOPS_AUTH_OIDC_ISSUER_URL`
+   `SENTINELOPS_AUTH_OIDC_AUDIENCE`
+   `SENTINELOPS_TELEMETRY_OTLP_ENDPOINT`
+
+Security and config
+- `config/sentinelops.toml` is the single checked-in app config for non-secret settings.
+- `config/sentinelops.production.toml` is the stricter production profile.
+- Secrets should stay in environment variables or secret mounts, not in the TOML file.
+- `auth_mode=disabled` keeps the local single-operator experience simple.
+- `auth_mode=api_key` and `auth_mode=oidc` enable shared-user access with identity and RBAC.
+- `deployment_mode=production` refuses to start unless OIDC, shared databases, OTLP telemetry, and an `https://` public URL are configured.
+- `model_license_policy=permissive_only` is the default guardrail for commercially friendlier default model choices.
 
 What the console gives you
 - A live operator console for running incident profiles against the real API
@@ -42,7 +96,8 @@ What the console gives you
 
 Key architecture decisions
 - Ollama runs outside Docker so local GPU access stays simple and memory overhead stays lower.
-- Chroma remains local and lightweight.
+- Shared workflow metadata can move to PostgreSQL through `SENTINELOPS_METADATA_DATABASE_URL`.
+- Workflow checkpoints can also move to PostgreSQL through `SENTINELOPS_WORKFLOW_CHECKPOINT_DATABASE_URL`.
 - FastAPI owns the transport layer, OpenAPI contracts, and the console entrypoint.
 - LangGraph is used only where durable checkpoints and approval pauses add value.
 - Recorded incident profiles are part of the product surface so the app stays reproducible on one machine.
@@ -51,6 +106,7 @@ Useful routes
 - `GET /health`
 - `GET /ready`
 - `GET /ready/strict`
+- `GET /me`
 - `GET /console/overview`
 - `GET /console/incidents`
 - `GET /console/timeline`
@@ -103,6 +159,7 @@ Operations proof
 
 Supporting docs
 - Architecture: [docs/architecture.md](docs/architecture.md)
+- Commercial and enterprise usage: [docs/commercial-and-enterprise-usage.md](docs/commercial-and-enterprise-usage.md)
 - Operator walkthrough: [docs/operator-walkthrough.md](docs/operator-walkthrough.md)
 - Incident library notes: [docs/incident-library.md](docs/incident-library.md)
 - Video walkthrough: [docs/video-walkthrough.md](docs/video-walkthrough.md)
@@ -115,6 +172,10 @@ Project layout
 - `data/reference_incidents/` reference incident history
 - `data/runtime/recent_incidents/` runtime incident captures
 - `data/runtime/workflow/` workflow checkpoints
-- `data/runtime/audit/` workflow audit trail
+- `config/` checked-in non-secret app configuration
+- `data/runtime/audit/` local fallback workflow audit trail
 - `docs/` product, architecture, and communication assets
 - `scripts/` local startup and reporting commands
+
+License
+- SentinelOps source in this repository is licensed under Apache-2.0: [LICENSE](LICENSE)

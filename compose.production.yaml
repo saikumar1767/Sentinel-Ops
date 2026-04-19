@@ -1,0 +1,22 @@
+services:
+  sentinelops-api:
+    environment:
+      SENTINELOPS_CONFIG_FILE: /app/config/sentinelops.production.toml
+      SENTINELOPS_DEPLOYMENT_MODE: production
+      SENTINELOPS_PUBLIC_BASE_URL: ${SENTINELOPS_PUBLIC_BASE_URL:?set https external URL}
+      SENTINELOPS_OLLAMA_HOST: ${SENTINELOPS_OLLAMA_HOST:?set Ollama endpoint}
+      SENTINELOPS_METADATA_DATABASE_URL: ${SENTINELOPS_METADATA_DATABASE_URL:?set shared metadata database URL}
+      SENTINELOPS_WORKFLOW_CHECKPOINT_DATABASE_URL: ${SENTINELOPS_WORKFLOW_CHECKPOINT_DATABASE_URL:?set shared workflow checkpoint database URL}
+      SENTINELOPS_AUTH_MODE: oidc
+      SENTINELOPS_AUTH_OIDC_ISSUER_URL: ${SENTINELOPS_AUTH_OIDC_ISSUER_URL:?set OIDC issuer URL}
+      SENTINELOPS_AUTH_OIDC_AUDIENCE: ${SENTINELOPS_AUTH_OIDC_AUDIENCE:?set OIDC audience}
+      SENTINELOPS_TELEMETRY_ENABLED: "true"
+      SENTINELOPS_TELEMETRY_EXPORTER: otlp
+      SENTINELOPS_TELEMETRY_OTLP_ENDPOINT: ${SENTINELOPS_TELEMETRY_OTLP_ENDPOINT:?set OTLP endpoint}
+    depends_on: {}
+
+  sentinelops-postgres:
+    profiles: ["local-only"]
+
+  sentinelops-keycloak:
+    profiles: ["local-only"]

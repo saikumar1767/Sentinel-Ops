@@ -320,7 +320,7 @@ def test_runtime_health_marks_retrieval_capabilities_degraded_when_embedding_mod
         def json(self) -> dict[str, object]:
             return {
                 "models": [
-                    {"name": "llama3.2:latest", "model": "llama3.2:latest"},
+                    {"name": "mistral:7b-instruct", "model": "mistral:7b-instruct"},
                 ]
             }
 
