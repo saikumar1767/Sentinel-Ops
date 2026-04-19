@@ -12,6 +12,34 @@ from pydantic_settings.sources import TomlConfigSettingsSource
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "sentinelops.toml"
+DEFAULT_WORKSPACE_IGNORE_DIRS = [
+    ".git",
+    ".hg",
+    ".svn",
+    ".idea",
+    ".vscode",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "node_modules",
+    "dist",
+    "build",
+    ".next",
+    ".turbo",
+]
+
+
+def _parse_list_like(value: object) -> object:
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return []
+        if cleaned.startswith("["):
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, list):
+                return parsed
+        return [item.strip() for item in cleaned.split(",") if item.strip()]
+    return value
 
 
 class Settings(BaseSettings):
@@ -26,6 +54,9 @@ class Settings(BaseSettings):
     app_version: str = "0.6.0"
     deployment_mode: Literal["local", "staging", "production"] = "local"
     public_base_url: str | None = None
+    workspace_root: Path = PROJECT_ROOT
+    workspace_name: str | None = None
+    workspace_ignore_dirs: list[str] = Field(default_factory=lambda: list(DEFAULT_WORKSPACE_IGNORE_DIRS))
     log_level: Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"] = "INFO"
     startup_validate_config: bool = True
     telemetry_enabled: bool = False
@@ -135,22 +166,19 @@ class Settings(BaseSettings):
     @field_validator("allowed_log_roots", mode="before")
     @classmethod
     def parse_allowed_log_roots(cls, value: object) -> object:
-        if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
-        return value
+        return _parse_list_like(value)
 
     @field_validator(
         "auth_analyst_roles",
         "auth_approver_roles",
         "auth_admin_roles",
         "commercially_reviewed_model_prefixes",
+        "workspace_ignore_dirs",
         mode="before",
     )
     @classmethod
     def parse_role_lists(cls, value: object) -> object:
-        if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
-        return value
+        return _parse_list_like(value)
 
     @field_validator("auth_bearer_tokens", mode="before")
     @classmethod
@@ -165,6 +193,7 @@ class Settings(BaseSettings):
     @field_validator(
         "telemetry_otlp_endpoint",
         "public_base_url",
+        "workspace_name",
         "workflow_checkpoint_database_url",
         "metadata_database_url",
         "auth_api_key",
@@ -186,6 +215,7 @@ class Settings(BaseSettings):
         return [cls._resolve_path(root) for root in roots]
 
     @field_validator(
+        "workspace_root",
         "incident_templates_dir",
         "incident_history_dir",
         "workflow_checkpoint_path",
@@ -226,6 +256,21 @@ class Settings(BaseSettings):
         if not self.auth_oidc_issuer_url:
             return None
         return self.auth_oidc_issuer_url.rstrip("/") + "/protocol/openid-connect/certs"
+
+    @property
+    def effective_workspace_name(self) -> str:
+        if self.workspace_name:
+            return self.workspace_name
+        return self.workspace_root.name or self.app_name
+
+    def workspace_relative_path(self, path: Path) -> str:
+        resolved = path.resolve()
+        workspace_root = self.workspace_root.resolve()
+        if resolved.is_relative_to(workspace_root):
+            return resolved.relative_to(workspace_root).as_posix()
+        if resolved.is_relative_to(PROJECT_ROOT):
+            return resolved.relative_to(PROJECT_ROOT).as_posix()
+        return str(resolved)
 
     def model_is_allowed_by_policy(self, model_name: str) -> bool:
         if self.model_license_policy != "permissive_only":

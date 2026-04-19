@@ -815,8 +815,10 @@ class ConsoleOverviewResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "generated_at": "2026-04-07T00:00:00Z",
-                "launch_command": "powershell -ExecutionPolicy Bypass -File scripts/start_sentinelops.ps1",
+                "launch_command": "sentinelops",
                 "console_url": "http://127.0.0.1:8000/console",
+                "workspace_name": "checkout-service",
+                "workspace_root": "/workspace/checkout-service",
                 "incident_count": 5,
                 "timeline_entry_count": 12,
                 "library_categories": [
@@ -839,6 +841,8 @@ class ConsoleOverviewResponse(BaseModel):
     generated_at: datetime
     launch_command: str
     console_url: str
+    workspace_name: str | None = None
+    workspace_root: str | None = None
     incident_count: int = Field(ge=0)
     timeline_entry_count: int = Field(ge=0)
     library_categories: list[ConsoleIncidentCategory] = Field(default_factory=list)

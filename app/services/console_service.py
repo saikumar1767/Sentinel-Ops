@@ -62,8 +62,10 @@ class ConsoleService:
         eval_summary = self.evaluation_service.build_summary()
         return ConsoleOverviewResponse(
             generated_at=datetime.now(UTC),
-            launch_command="powershell -ExecutionPolicy Bypass -File scripts/start_sentinelops.ps1",
+            launch_command="sentinelops",
             console_url="http://127.0.0.1:8000/console",
+            workspace_name=self.settings.effective_workspace_name,
+            workspace_root=str(self.settings.workspace_root),
             incident_count=incident_library.incident_count,
             timeline_entry_count=timeline.total_entries,
             library_categories=self._library_categories(incident_library.incidents),
