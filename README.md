@@ -8,7 +8,7 @@ Install
 - macOS / Linux:
   `curl -fsSL https://raw.githubusercontent.com/saikumar1767/Sentinel-Ops/main/scripts/install_sentinelops.sh | bash`
 - Direct with `uv`:
-  `uv tool install --from git+https://github.com/saikumar1767/Sentinel-Ops.git sentinel-ops`
+  `uv tool install --from https://github.com/saikumar1767/Sentinel-Ops/archive/refs/heads/main.zip sentinel-ops`
 
 Use
 - Start app:
@@ -24,6 +24,7 @@ Plug-and-play behavior
 - First run bootstraps `~/.sentinelops`
 - Starter config and product data are copied automatically
 - Console opens automatically when the API becomes healthy
+- Installer paths do not require Git; they install from the public GitHub source archive
 - Local profile works with one command; production profile is available with `sentinelops start --profile production`
 
 Core product surfaces
