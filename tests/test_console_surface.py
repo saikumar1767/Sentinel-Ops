@@ -84,8 +84,10 @@ class StubConsoleService:
     def overview(self) -> ConsoleOverviewResponse:
         return ConsoleOverviewResponse(
             generated_at=datetime.now(UTC),
-            launch_command="powershell -ExecutionPolicy Bypass -File scripts/start_sentinelops.ps1",
+            launch_command="sentinelops",
             console_url="http://127.0.0.1:8000/console",
+            workspace_name="checkout-service",
+            workspace_root="/workspace/checkout-service",
             incident_count=2,
             timeline_entry_count=2,
             library_categories=["workflow", "resilience"],
@@ -214,6 +216,7 @@ def test_console_service_loads_repo_incidents_and_builds_timeline() -> None:
     assert overview.incident_count == incident_library.incident_count
     assert overview.eval_total_cases == 54
     assert "approval" in overview.library_categories
+    assert overview.launch_command == "sentinelops"
 
 
 def test_console_service_timeline_merges_runtime_and_reference_entries(tmp_path) -> None:

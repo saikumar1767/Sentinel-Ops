@@ -11,7 +11,7 @@ from app.log_utils import (
     truncate_text,
 )
 from app.schemas import CompareTwoLogsArgs, GrepErrorPatternArgs, ReadLogFileArgs
-from app.settings import PROJECT_ROOT, Settings
+from app.settings import Settings
 
 
 class FileTools:
@@ -122,7 +122,7 @@ class FileTools:
 
         # Accept project-relative paths like data/logs/foo.log in addition to
         # root-relative paths like foo.log.
-        project_relative = (PROJECT_ROOT / candidate).resolve()
+        project_relative = (self.settings.workspace_root / candidate).resolve()
         if project_relative.is_file() and any(
             project_relative.is_relative_to(root) for root in roots
         ):
@@ -142,10 +142,7 @@ class FileTools:
         raise FileNotFoundError(f"Log file not found under allowed roots: {raw_path}")
 
     def display_path(self, path: Path) -> str:
-        resolved = path.resolve()
-        if resolved.is_relative_to(PROJECT_ROOT):
-            return resolved.relative_to(PROJECT_ROOT).as_posix()
-        return str(resolved)
+        return self.settings.workspace_relative_path(path)
 
     def _load_indexed_lines(self, path: Path) -> list[tuple[int, str]]:
         text = path.read_text(encoding="utf-8", errors="replace")

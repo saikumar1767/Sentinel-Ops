@@ -11,21 +11,44 @@ Install
   `uv tool install --from https://github.com/saikumar1767/Sentinel-Ops/archive/refs/heads/main.zip sentinel-ops`
 
 Use
-- Start app:
+- Start the standalone workspace:
+  `sentinelops`
+- Attach SentinelOps to the repo you are currently working in:
+  `sentinelops attach`
+- Start SentinelOps as that repo's copilot:
   `sentinelops`
 - Start without opening browser:
   `sentinelops start --no-browser`
-- Validate environment:
+- Validate the attached repo or standalone workspace:
   `sentinelops doctor`
-- Show paths:
+- Show the active workspace and runtime paths:
   `sentinelops paths`
 
+Use SentinelOps in your own repo
+1. Open a project repository:
+   `cd your-project`
+2. Attach SentinelOps once:
+   `sentinelops attach`
+3. Start the project copilot:
+   `sentinelops`
+4. Optional: add extra repo log roots:
+   `sentinelops attach --overwrite --log-root logs --log-root services/api/logs`
+
+Repo copilot behavior
+- SentinelOps creates a repo-local home at `.sentinelops/`
+- Running `sentinelops` inside that repo, or any child directory, auto-detects the attached project
+- The loader reads the repo's `README`, `docs/`, `runbooks/`, `ops/`, deployment manifests, and GitHub workflow files
+- Log tools automatically look in common repo log roots such as `logs/`, `log/`, `data/logs/`, and `var/log/`
+- Repo-specific settings live in `.sentinelops/project.toml`
+
 Plug-and-play behavior
-- First run bootstraps `~/.sentinelops`
+- Standalone mode bootstraps `~/.sentinelops`
+- Repo mode bootstraps `.sentinelops/` inside the attached project
 - Starter config and product data are copied automatically
 - Console opens automatically when the API becomes healthy
 - Installer paths do not require Git; they install from the public GitHub source archive
 - Local profile works with one command; production profile is available with `sentinelops start --profile production`
+- Once a repo is attached, `sentinelops` behaves like a project-local copilot instead of a separate demo workspace
 
 Core product surfaces
 - Operations console: `/console`

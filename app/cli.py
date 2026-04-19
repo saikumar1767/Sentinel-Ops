@@ -12,7 +12,7 @@ from pathlib import Path
 
 import uvicorn
 
-from app.bootstrap import apply_runtime_environment, ensure_app_home, runtime_summary
+from app.bootstrap import apply_runtime_environment, attach_project, ensure_app_home, runtime_summary
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -27,6 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     start_parser.add_argument("--port", type=int, default=8000)
     start_parser.add_argument("--profile", choices=("local", "production"), default="local")
     start_parser.add_argument("--home", type=Path, default=None)
+    start_parser.add_argument("--project-root", type=Path, default=None)
     start_parser.add_argument("--reload", action="store_true")
     start_parser.add_argument("--no-browser", action="store_true")
 
@@ -34,13 +35,24 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--home", type=Path, default=None)
     init_parser.add_argument("--overwrite", action="store_true")
 
+    attach_parser = subparsers.add_parser(
+        "attach",
+        help="Attach SentinelOps to the current repo so it acts as a project copilot.",
+    )
+    attach_parser.add_argument("--project-root", type=Path, default=None)
+    attach_parser.add_argument("--name", default=None)
+    attach_parser.add_argument("--log-root", action="append", default=[])
+    attach_parser.add_argument("--overwrite", action="store_true")
+
     doctor_parser = subparsers.add_parser("doctor", help="Validate config and print runtime readiness.")
     doctor_parser.add_argument("--profile", choices=("local", "production"), default="local")
     doctor_parser.add_argument("--home", type=Path, default=None)
+    doctor_parser.add_argument("--project-root", type=Path, default=None)
 
     paths_parser = subparsers.add_parser("paths", help="Print important SentinelOps paths.")
     paths_parser.add_argument("--profile", choices=("local", "production"), default="local")
     paths_parser.add_argument("--home", type=Path, default=None)
+    paths_parser.add_argument("--project-root", type=Path, default=None)
 
     subparsers.add_parser("version", help="Print SentinelOps version.")
     return parser
@@ -58,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
                 port=args.port,
                 profile=args.profile,
                 app_home=args.home,
+                project_root=args.project_root,
                 reload=args.reload,
                 open_browser=not args.no_browser,
             )
@@ -65,10 +78,25 @@ def main(argv: list[str] | None = None) -> int:
             home = ensure_app_home(app_home=args.home, overwrite=args.overwrite)
             print(f"SentinelOps home ready at {home}")
             return 0
+        if command == "attach":
+            project_root, home = attach_project(
+                project_root=args.project_root,
+                workspace_name=args.name,
+                log_roots=args.log_root,
+                overwrite=args.overwrite,
+            )
+            print(f"SentinelOps attached to {project_root}")
+            print(f"Project home: {home}")
+            print("Next: run `sentinelops` from this repo to start the project copilot.")
+            return 0
         if command == "doctor":
-            return _doctor_command(profile=args.profile, app_home=args.home)
+            return _doctor_command(profile=args.profile, app_home=args.home, project_root=args.project_root)
         if command == "paths":
-            for key, value in runtime_summary(app_home=args.home, profile=args.profile).items():
+            for key, value in runtime_summary(
+                app_home=args.home,
+                profile=args.profile,
+                project_root=args.project_root,
+            ).items():
                 print(f"{key}: {value}")
             return 0
         if command == "version":
@@ -90,14 +118,18 @@ def _start_command(
     port: int,
     profile: str,
     app_home: Path | None,
+    project_root: Path | None,
     reload: bool,
     open_browser: bool,
 ) -> int:
-    home = apply_runtime_environment(app_home=app_home, profile=profile)
+    home = apply_runtime_environment(app_home=app_home, profile=profile, project_root=project_root)
     console_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
     console_url = f"http://{console_host}:{port}/console"
 
     print(f"SentinelOps home: {home}")
+    workspace_root = os.environ.get("SENTINELOPS_WORKSPACE_ROOT")
+    if workspace_root:
+        print(f"Project workspace: {workspace_root}")
     _print_ollama_hint()
     if open_browser:
         browser_thread = threading.Thread(
@@ -117,8 +149,8 @@ def _start_command(
     return 0
 
 
-def _doctor_command(*, profile: str, app_home: Path | None) -> int:
-    apply_runtime_environment(app_home=app_home, profile=profile)
+def _doctor_command(*, profile: str, app_home: Path | None, project_root: Path | None) -> int:
+    apply_runtime_environment(app_home=app_home, profile=profile, project_root=project_root)
 
     from app.dependencies import (
         get_authentication_service,
@@ -145,7 +177,11 @@ def _doctor_command(*, profile: str, app_home: Path | None) -> int:
     report = RuntimeHealthService(settings).readiness_report(scope="strict" if profile == "production" else "traffic")
 
     print(f"deployment_mode: {settings.deployment_mode}")
-    print(f"config_file: {runtime_summary(app_home=app_home, profile=profile)['config_file']}")
+    summary = runtime_summary(app_home=app_home, profile=profile, project_root=project_root)
+    if "workspace_root" in summary:
+        print(f"workspace_root: {summary['workspace_root']}")
+        print(f"workspace_name: {summary['workspace_name']}")
+    print(f"config_file: {summary['config_file']}")
     print(f"ready: {report.ready}")
     print(f"status: {report.status}")
     print(f"summary: {report.summary}")
