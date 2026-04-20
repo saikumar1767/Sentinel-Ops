@@ -12,10 +12,12 @@ from pathlib import Path
 
 import uvicorn
 
+from app.agent_integrations import AgentInstallResult, SUPPORTED_AGENTS, install_agent_integrations
 from app.bootstrap import apply_runtime_environment, attach_project, ensure_app_home, runtime_summary
 
 
 def build_parser() -> argparse.ArgumentParser:
+    agent_choices = ("all", *SUPPORTED_AGENTS)
     parser = argparse.ArgumentParser(
         prog="sentinelops",
         description="Plug-and-play launcher and utility CLI for SentinelOps.",
@@ -42,7 +44,16 @@ def build_parser() -> argparse.ArgumentParser:
     attach_parser.add_argument("--project-root", type=Path, default=None)
     attach_parser.add_argument("--name", default=None)
     attach_parser.add_argument("--log-root", action="append", default=[])
+    attach_parser.add_argument("--agent", choices=agent_choices, default=None)
     attach_parser.add_argument("--overwrite", action="store_true")
+
+    install_agent_parser = subparsers.add_parser(
+        "install-agent",
+        help="Generate repo-local agent and editor integration files for an attached project.",
+    )
+    install_agent_parser.add_argument("--project-root", type=Path, default=None)
+    install_agent_parser.add_argument("--agent", choices=agent_choices, default="all")
+    install_agent_parser.add_argument("--overwrite", action="store_true")
 
     doctor_parser = subparsers.add_parser("doctor", help="Validate config and print runtime readiness.")
     doctor_parser.add_argument("--profile", choices=("local", "production"), default="local")
@@ -87,7 +98,22 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"SentinelOps attached to {project_root}")
             print(f"Project home: {home}")
+            if args.agent:
+                result = install_agent_integrations(
+                    project_root=project_root,
+                    agent=args.agent,
+                    overwrite=args.overwrite,
+                )
+                _print_agent_install_result(result)
             print("Next: run `sentinelops` from this repo to start the project copilot.")
+            return 0
+        if command == "install-agent":
+            result = install_agent_integrations(
+                project_root=args.project_root,
+                agent=args.agent,
+                overwrite=args.overwrite,
+            )
+            _print_agent_install_result(result)
             return 0
         if command == "doctor":
             return _doctor_command(profile=args.profile, app_home=args.home, project_root=args.project_root)
@@ -201,6 +227,19 @@ def _print_ollama_hint() -> None:
         print(f"Ollama reachable at {ollama_host}")
     except Exception:
         print(f"Ollama not reachable at {ollama_host}. Start `ollama serve` if model requests fail.")
+
+
+def _print_agent_install_result(result: AgentInstallResult) -> None:
+    print(f"Agent integrations ready for: {', '.join(result.installed_agents)}")
+    print(f"Project root: {result.project_root}")
+    if result.written_files:
+        print("Written files:")
+        for path in result.written_files:
+            print(f"  - {path}")
+    if result.skipped_files:
+        print("Skipped existing files (re-run with --overwrite to replace):")
+        for path in result.skipped_files:
+            print(f"  - {path}")
 
 
 def _open_when_ready(console_url: str) -> None:

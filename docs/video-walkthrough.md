@@ -1,41 +1,59 @@
 # SentinelOps Video Walkthrough
 
-## Target length
+## Target Length
 
-2 to 4 minutes
+3 to 5 minutes
 
-## Recording goal
+## Recording Goal
 
 A viewer should understand:
+
 - what SentinelOps does
-- how it works
-- why it is technically credible
+- how repo-local installation works
+- why the incident workflow is technically credible
 - what proof exists that it works
 
-## Shot list
+## Shot List
 
 ### Shot 1: Product and problem
 
 Screen:
-- console hero section
+
+- top of `README.md`
+- repo-local install flow
 
 Narration:
 
-> SentinelOps is a local-first incident copilot for log triage, grounded investigations, and approval-aware workflow execution.
+> SentinelOps is a plug-and-play incident and operations copilot. You can run it as a local console or attach it directly to an engineering repo so it understands that project's logs, runbooks, and deploy context.
 
-### Shot 2: Readiness and proof
+### Shot 2: Repo-local setup
 
 Screen:
-- readiness card
+
+- `sentinelops attach --agent all`
+- `.sentinelops/agent-context.md`
+- generated `AGENTS.md`
+
+Narration:
+
+> One command bootstraps the repo-local workspace, writes the project contract, and generates agent/editor integrations so the repo can carry its own operational context.
+
+### Shot 3: Readiness and proof
+
+Screen:
+
+- `sentinelops doctor`
+- console overview
 - evaluation card
 
 Narration:
 
-> The product includes readiness checks, deterministic evaluations, and a compact local runtime so it is easy to trust and easy to inspect.
+> The product includes readiness checks, deterministic evaluations, and a compact runtime so it is easy to trust and easy to inspect.
 
-### Shot 3: Workflow path
+### Shot 4: Workflow path
 
 Screen:
+
 - select `Database Pool Exhaustion Workflow`
 - run it
 - show approval pause
@@ -44,20 +62,22 @@ Narration:
 
 > The workflow gathers safe evidence, retrieves supporting documentation, drafts a remediation plan, and pauses before sensitive action completes.
 
-### Shot 4: Approval and timeline
+### Shot 5: Approval and timeline
 
 Screen:
+
 - approve the workflow
 - show final report and citations
 - show timeline update
 
 Narration:
 
-> That creates both a structured report and a persistent incident history for later review.
+> That creates both a structured report and a durable incident history for later review.
 
-### Shot 5: One-shot investigation
+### Shot 6: One-shot investigation
 
 Screen:
+
 - select `Network DNS Regression Investigation`
 - run it
 
@@ -65,22 +85,14 @@ Narration:
 
 > When durable workflow state is not needed, the one-shot investigation route provides a faster grounded answer.
 
-### Shot 6: Resilience
-
-Screen:
-- select `Service Restart With Missing Log Path`
-- show tool results
-
-Narration:
-
-> SentinelOps handles partial evidence safely. If one tool call fails, the investigation records the failure and keeps going with the evidence that is still available.
-
 ### Shot 7: Close
 
 Screen:
+
 - `/docs`
 - `/eval/summary`
+- `docs/repo-copilot-validation.md`
 
 Narration:
 
-> The project includes an API, evaluations, an operator console, architecture docs, and a clear technical story.
+> SentinelOps now ships as an installable CLI, a repo-local copilot, an operator console, and a production-shaped service. The docs, validations, and generated integrations are all part of the product.

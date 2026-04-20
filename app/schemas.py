@@ -1065,7 +1065,7 @@ class LivenessResponse(BaseModel):
                 "summary": "API process is alive.",
                 "app": {
                     "name": "SentinelOps",
-                    "version": "0.6.0",
+                    "version": "0.8.0",
                 },
             }
         }
@@ -1090,7 +1090,7 @@ class ReadinessResponse(BaseModel):
                 "summary": "Core incident analysis traffic is ready, but one or more optional capabilities are degraded.",
                 "app": {
                     "name": "SentinelOps",
-                    "version": "0.6.0",
+                    "version": "0.8.0",
                 },
                 "dependencies": {
                     "ollama": {
@@ -1208,7 +1208,7 @@ class MetricsResponse(BaseModel):
                 "uptime_seconds": 132.441,
                 "app": {
                     "name": "SentinelOps",
-                    "version": "0.6.0",
+                    "version": "0.8.0",
                 },
                 "requests": {
                     "total_requests": 12,

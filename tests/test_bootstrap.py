@@ -84,6 +84,7 @@ def test_attach_project_creates_repo_local_manifest_and_gitignore(tmp_path, monk
     project_root = tmp_path / "checkout-service"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / ".git").mkdir()
+    (project_root / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
     _write(source_root / "config" / "sentinelops.toml", 'app_name = "SentinelOps"\n')
     _write(source_root / "config" / "sentinelops.production.toml", 'deployment_mode = "production"\n')
     _write(source_root / "data" / "incident_templates" / "database.md", "# template\n")
@@ -106,9 +107,17 @@ def test_attach_project_creates_repo_local_manifest_and_gitignore(tmp_path, monk
     assert home == (project_root / ".sentinelops").resolve()
     assert manifest_path.exists()
     assert (project_root / ".sentinelops" / ".gitignore").exists()
+    assert (project_root / ".sentinelops" / "agent-context.md").exists()
     manifest_text = manifest_path.read_text(encoding="utf-8")
     assert 'workspace_name = "Checkout Service"' in manifest_text
     assert '"services/api/logs"' in manifest_text
+    repo_gitignore = (project_root / ".gitignore").read_text(encoding="utf-8")
+    assert "node_modules/" in repo_gitignore
+    assert ".sentinelops/" in repo_gitignore
+
+    agent_context = (project_root / ".sentinelops" / "agent-context.md").read_text(encoding="utf-8")
+    assert "Checkout Service" in agent_context
+    assert "`sentinelops doctor`" in agent_context
 
 
 def test_apply_runtime_environment_uses_attached_project_when_manifest_exists(tmp_path, monkeypatch) -> None:

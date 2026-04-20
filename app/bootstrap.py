@@ -23,6 +23,7 @@ _BUNDLED_RELATIVE_PATHS = (
 )
 _PROJECT_HOME_DIRNAME = ".sentinelops"
 _PROJECT_MANIFEST_FILENAME = "project.toml"
+_AGENT_CONTEXT_FILENAME = "agent-context.md"
 _REPOSITORY_MARKERS = (
     ".git",
     "pyproject.toml",
@@ -46,6 +47,7 @@ _PROJECT_GITIGNORE = """data/runtime/
 data/chroma/
 data/logs/
 """
+_REPO_GITIGNORE_ENTRY = ".sentinelops/"
 
 
 def default_app_home() -> Path:
@@ -72,6 +74,10 @@ def project_home(project_root: Path) -> Path:
 
 def project_manifest_path(project_root: Path) -> Path:
     return project_home(project_root) / _PROJECT_MANIFEST_FILENAME
+
+
+def agent_context_path(project_root: Path) -> Path:
+    return project_home(project_root) / _AGENT_CONTEXT_FILENAME
 
 
 def find_attached_project_root(start_path: Path | None = None) -> Path | None:
@@ -120,6 +126,8 @@ def attach_project(
         overwrite=overwrite,
     )
     _write_project_gitignore(home)
+    _ensure_repo_gitignore(resolved_project_root)
+    _write_agent_context(resolved_project_root)
     return resolved_project_root, home
 
 
@@ -291,6 +299,83 @@ def _write_project_gitignore(home: Path) -> None:
     if gitignore_path.exists():
         return
     gitignore_path.write_text(_PROJECT_GITIGNORE, encoding="utf-8")
+
+
+def _ensure_repo_gitignore(project_root: Path) -> None:
+    gitignore_path = project_root / ".gitignore"
+    if not gitignore_path.exists():
+        gitignore_path.write_text(_REPO_GITIGNORE_ENTRY + "\n", encoding="utf-8")
+        return
+
+    existing = gitignore_path.read_text(encoding="utf-8", errors="replace")
+    lines = [line.strip() for line in existing.splitlines()]
+    if _REPO_GITIGNORE_ENTRY in lines:
+        return
+
+    suffix = "" if existing.endswith("\n") or not existing else "\n"
+    gitignore_path.write_text(existing + suffix + _REPO_GITIGNORE_ENTRY + "\n", encoding="utf-8")
+
+
+def _write_agent_context(project_root: Path) -> None:
+    manifest = read_project_manifest(project_root)
+    workspace_name = str(manifest.get("workspace_name") or project_root.name)
+    log_roots = [
+        path.relative_to(project_root).as_posix()
+        if path.is_relative_to(project_root)
+        else str(path)
+        for path in _resolve_project_log_roots(project_root, project_home(project_root), manifest)
+        if path.is_relative_to(project_root)
+    ]
+    if not log_roots:
+        log_roots = [path.as_posix() for path in _DEFAULT_PROJECT_LOG_ROOTS]
+
+    content = _render_agent_context(project_root, workspace_name=workspace_name, log_roots=log_roots)
+    agent_context_path(project_root).write_text(content, encoding="utf-8")
+
+
+def _render_agent_context(project_root: Path, *, workspace_name: str, log_roots: list[str]) -> str:
+    quoted_logs = "\n".join(f"- `{log_root}`" for log_root in log_roots)
+    return f"""# SentinelOps Agent Context
+
+SentinelOps is attached to this repository as a repo-local project copilot.
+
+## Workspace
+
+- Name: `{workspace_name}`
+- Root: `{project_root}`
+- Project manifest: `.sentinelops/project.toml`
+- Repo-local runtime home: `.sentinelops/`
+
+## Preferred Commands
+
+- `sentinelops`
+- `sentinelops doctor`
+- `sentinelops paths`
+- `sentinelops start --no-browser`
+- `ollama serve`
+
+## When To Use SentinelOps
+
+Use SentinelOps when the task involves:
+
+- incident triage
+- log inspection
+- runbooks and operational docs
+- readiness or health checks
+- remediation workflows
+- deployment or service failure analysis
+
+## Project Log Roots
+
+{quoted_logs}
+
+## Notes For Agents
+
+- Start with `sentinelops paths` to confirm the active workspace.
+- Use `sentinelops doctor` before assuming model-backed investigation is ready.
+- Repo docs, runbooks, deploy files, and GitHub workflows may be part of SentinelOps retrieval context.
+- Keep operational guidance grounded in this repository and `.sentinelops/project.toml`.
+"""
 
 
 def _escape_toml_string(value: str) -> str:
