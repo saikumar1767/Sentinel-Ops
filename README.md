@@ -1,56 +1,120 @@
-SentinelOps
+<p align="center">
+  <img src="docs/assets/sentinelops-mark.svg" width="140" alt="SentinelOps mark" />
+</p>
 
-SentinelOps is an edge-first incident copilot for log triage, grounded investigations, and approval-aware workflow execution. It combines FastAPI, Ollama, safe local tools, durable workflow checkpoints, shared workflow metadata, and optional OIDC auth so an operator can move from raw evidence to a structured response quickly.
+<h1 align="center">SentinelOps</h1>
 
-Install
-- Windows PowerShell:
-  `irm https://raw.githubusercontent.com/saikumar1767/Sentinel-Ops/main/scripts/install_sentinelops.ps1 | iex`
-- macOS / Linux:
-  `curl -fsSL https://raw.githubusercontent.com/saikumar1767/Sentinel-Ops/main/scripts/install_sentinelops.sh | bash`
-- Direct with `uv`:
-  `uv tool install --from https://github.com/saikumar1767/Sentinel-Ops/archive/refs/heads/main.zip sentinel-ops`
+<p align="center">
+  <strong>why chase outages blind when one copilot can trace the path</strong>
+</p>
 
-Use
-- Start the standalone workspace:
-  `sentinelops`
-- Attach SentinelOps to the repo you are currently working in:
-  `sentinelops attach`
-- Start SentinelOps as that repo's copilot:
-  `sentinelops`
-- Start without opening browser:
-  `sentinelops start --no-browser`
-- Validate the attached repo or standalone workspace:
-  `sentinelops doctor`
-- Show the active workspace and runtime paths:
-  `sentinelops paths`
+<p align="center">
+  <a href="https://github.com/saikumar1767/Sentinel-Ops/stargazers"><img src="https://img.shields.io/github/stars/saikumar1767/Sentinel-Ops?style=flat&color=FACC15" alt="Stars"></a>
+  <a href="https://github.com/saikumar1767/Sentinel-Ops/commits/main"><img src="https://img.shields.io/github/last-commit/saikumar1767/Sentinel-Ops?style=flat" alt="Last Commit"></a>
+  <a href="NOTICE"><img src="https://img.shields.io/badge/notice-Apache--2.0-0F172A?style=flat" alt="NOTICE"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/saikumar1767/Sentinel-Ops?style=flat&color=38BDF8" alt="License"></a>
+</p>
 
-Use SentinelOps in your own repo
-1. Open a project repository:
-   `cd your-project`
-2. Attach SentinelOps once:
-   `sentinelops attach`
-3. Start the project copilot:
-   `sentinelops`
-4. Optional: add extra repo log roots:
-   `sentinelops attach --overwrite --log-root logs --log-root services/api/logs`
+<p align="center">
+  <a href="#install">Install</a> &middot;
+  <a href="#repo-copilot">Repo Copilot</a> &middot;
+  <a href="#agent-integrations">Agent Integrations</a> &middot;
+  <a href="#production">Production</a> &middot;
+  <a href="#verification">Verification</a> &middot;
+  <a href="#docs">Docs</a>
+</p>
 
-Repo copilot behavior
-- SentinelOps creates a repo-local home at `.sentinelops/`
-- Running `sentinelops` inside that repo, or any child directory, auto-detects the attached project
-- The loader reads the repo's `README`, `docs/`, `runbooks/`, `ops/`, deployment manifests, and GitHub workflow files
-- Log tools automatically look in common repo log roots such as `logs/`, `log/`, `data/logs/`, and `var/log/`
-- Repo-specific settings live in `.sentinelops/project.toml`
+---
 
-Plug-and-play behavior
-- Standalone mode bootstraps `~/.sentinelops`
-- Repo mode bootstraps `.sentinelops/` inside the attached project
-- Starter config and product data are copied automatically
-- Console opens automatically when the API becomes healthy
-- Installer paths do not require Git; they install from the public GitHub source archive
-- Local profile works with one command; production profile is available with `sentinelops start --profile production`
-- Once a repo is attached, `sentinelops` behaves like a project-local copilot instead of a separate demo workspace
+SentinelOps is a plug-and-play incident and operations copilot that can run in three shapes:
 
-Core product surfaces
+- standalone local operator console
+- repo-local copilot inside any project
+- production-shaped internal service with OIDC, Postgres, telemetry, and workflow audit trails
+
+It combines FastAPI, Ollama, safe local tooling, retrieval, durable workflows, and generated agent/editor integrations so teams can go from raw logs to grounded incident responses without inventing a custom process per repo.
+
+## Before / After
+
+| Before SentinelOps | After SentinelOps |
+| --- | --- |
+| Logs live in random folders, runbooks are easy to miss, and every agent guesses repo ops context from scratch. | `sentinelops attach --agent all` creates `.sentinelops/`, repo-local agent context, editor rules, a Codex plugin bundle, and a repeatable ops copilot flow. |
+| Incident triage depends on pasted snippets and tribal knowledge. | `/analyze`, `/investigate`, and `/workflow/investigate` can use repo logs, runbooks, deployment manifests, and workflow checkpoints. |
+| Production readiness is a separate effort from the local demo. | The same app supports local mode, repo-local mode, and a stricter production profile with OIDC, Postgres, and telemetry guardrails. |
+
+## Install
+
+Pick the install path that fits your environment.
+
+| Platform | Command |
+| --- | --- |
+| Windows PowerShell | `irm https://raw.githubusercontent.com/saikumar1767/Sentinel-Ops/main/scripts/install_sentinelops.ps1 \| iex` |
+| macOS / Linux | `curl -fsSL https://raw.githubusercontent.com/saikumar1767/Sentinel-Ops/main/scripts/install_sentinelops.sh \| bash` |
+| Direct with `uv` | `uv tool install --from https://github.com/saikumar1767/Sentinel-Ops/archive/refs/heads/main.zip sentinel-ops` |
+
+After install, the CLI is just:
+
+```bash
+sentinelops
+```
+
+## Repo Copilot
+
+SentinelOps can be installed into someone else's repo the same way a developer would add a coding copilot or repo rule pack.
+
+```bash
+cd your-project
+sentinelops attach --agent all
+sentinelops
+```
+
+Recommended follow-up commands:
+
+```bash
+sentinelops doctor
+sentinelops paths
+sentinelops install-agent --agent all --overwrite
+```
+
+What repo-local mode does:
+
+- creates `.sentinelops/` inside the attached repo
+- writes `.sentinelops/project.toml` and `.sentinelops/agent-context.md`
+- adds `.sentinelops/` to the repo `.gitignore`
+- scopes runtime state and logs to that repo
+- loads the repo `README`, `docs/`, `runbooks/`, `ops/`, deploy files, and `.github/workflows/`
+- auto-detects the attached workspace from any child directory
+
+## Agent Integrations
+
+`sentinelops attach --agent all` wires multiple tools at once.
+
+| Agent / Tool | Generated Surface | What it Gives You |
+| --- | --- | --- |
+| Codex | `.agents/plugins/marketplace.json`, `plugins/sentinelops-copilot/` | Repo-local plugin, skill, commands, and marketplace entry |
+| Cursor | `.cursor/rules/sentinelops.mdc` | Always-on repo rule for ops and incident work |
+| Windsurf | `.windsurf/rules/sentinelops.md` | Repo-local ops-copilot instruction file |
+| Cline | `.clinerules/sentinelops.md` | Repo-local investigation and readiness workflow guidance |
+| GitHub Copilot | `.github/copilot-instructions.md` | Merged SentinelOps block for repo-local operational context |
+| Cross-agent | `AGENTS.md` | Shared repo guidance that other tools can read directly |
+
+Safety behavior:
+
+- shared files like `AGENTS.md`, `.agents/plugins/marketplace.json`, and `.github/copilot-instructions.md` are merged instead of blindly replaced
+- dedicated generated files are preserved unless you re-run with `--overwrite`
+
+## What SentinelOps Reads
+
+Repo-local retrieval and operator flows prioritize real project context:
+
+- top-level `README*`
+- `docs/`, `runbooks/`, `ops/`, `deploy/`, `k8s/`, `helm/`
+- `.github/workflows/*.yml` and `.yaml`
+- `Dockerfile`, `docker-compose*`, `compose*`, `.env.example`, `.env.*.example`
+- repo log roots like `logs/`, `log/`, `data/logs/`, and `var/log/`
+
+## Core Product Surfaces
+
 - Operations console: `/console`
 - Console overview: `/console/overview`
 - Incident library: `/console/incidents`
@@ -59,147 +123,110 @@ Core product surfaces
 - One-shot investigation: `POST /investigate`
 - Workflow investigation: `POST /workflow/investigate`
 - Workflow thread history: `GET /workflow/threads`
-- Evaluation summary: `/eval/summary`
 - Current user: `/me`
+- Evaluation summary: `/eval/summary`
 - Metrics: `/metrics`
 
-Run from source repo
-1. Install dependencies:
-   `uv sync`
-2. Pull the local models:
-   `ollama pull mistral:7b-instruct`
-   `ollama pull nomic-embed-text`
-3. Start from the repo:
-   `uv run sentinelops`
-4. Open:
-   [http://127.0.0.1:8000/console](http://127.0.0.1:8000/console)
+## Production
 
-Manual startup
-1. Start Ollama:
-   `ollama serve`
-2. Start the API:
-   `uv run sentinelops start --host 127.0.0.1 --port 8000 --reload`
-3. Open:
-   [http://127.0.0.1:8000/console](http://127.0.0.1:8000/console)
+SentinelOps can stay local, but it also has a stricter production profile for shared company rollouts.
 
-Shared company-style stack
-1. Keep Ollama running on the host:
-   `ollama serve`
-2. Start the shared infra:
-   `docker compose up --build sentinelops-postgres sentinelops-keycloak sentinelops-api`
-3. Switch auth on with env vars when you are ready:
-   `SENTINELOPS_AUTH_MODE=oidc`
-   `SENTINELOPS_AUTH_OIDC_ISSUER_URL=http://127.0.0.1:8081/realms/sentinelops`
-   `SENTINELOPS_AUTH_OIDC_AUDIENCE=sentinelops-api`
-
-Production-oriented compose profile
-1. Use the production config and override file:
-   `docker compose -f compose.yaml -f compose.production.yaml up --build sentinelops-api`
-2. Supply all required external URLs and secrets:
-   `SENTINELOPS_PUBLIC_BASE_URL`
-   `SENTINELOPS_METADATA_DATABASE_URL`
-   `SENTINELOPS_WORKFLOW_CHECKPOINT_DATABASE_URL`
-   `SENTINELOPS_AUTH_OIDC_ISSUER_URL`
-   `SENTINELOPS_AUTH_OIDC_AUDIENCE`
-   `SENTINELOPS_TELEMETRY_OTLP_ENDPOINT`
-
-Security and config
-- `config/sentinelops.toml` is the single checked-in app config for non-secret settings.
-- `config/sentinelops.production.toml` is the stricter production profile.
-- Secrets should stay in environment variables or secret mounts, not in the TOML file.
-- `auth_mode=disabled` keeps the local single-operator experience simple.
-- `auth_mode=api_key` and `auth_mode=oidc` enable shared-user access with identity and RBAC.
-- `deployment_mode=production` refuses to start unless OIDC, shared databases, OTLP telemetry, and an `https://` public URL are configured.
-- `model_license_policy=permissive_only` is the default guardrail for commercially friendlier default model choices.
-
-What the console gives you
-- A live operator console for running incident profiles against the real API
-- An incident library with request payloads, expected outcomes, and workflow paths
-- A saved incident timeline that blends recent runtime incidents with reference incidents
-- Evaluation and readiness summaries so the system is inspectable before use
-
-Key architecture decisions
-- Ollama runs outside Docker so local GPU access stays simple and memory overhead stays lower.
-- Shared workflow metadata can move to PostgreSQL through `SENTINELOPS_METADATA_DATABASE_URL`.
-- Workflow checkpoints can also move to PostgreSQL through `SENTINELOPS_WORKFLOW_CHECKPOINT_DATABASE_URL`.
-- FastAPI owns the transport layer, OpenAPI contracts, and the console entrypoint.
-- LangGraph is used only where durable checkpoints and approval pauses add value.
-- Recorded incident profiles are part of the product surface so the app stays reproducible on one machine.
-
-Useful routes
-- `GET /health`
-- `GET /ready`
-- `GET /ready/strict`
-- `GET /me`
-- `GET /console/overview`
-- `GET /console/incidents`
-- `GET /console/timeline`
-- `GET /docs`
-- `GET /eval/summary`
-- `GET /metrics`
-
-Example requests
-
-Analyze:
-```powershell
-Invoke-RestMethod http://127.0.0.1:8000/analyze `
-  -Method POST `
-  -ContentType "application/json" `
-  -Body '{"log_text":"2026-03-31 18:45:09 ERROR readiness probe failed with connection refused on port 8080\n2026-03-31 18:45:14 ERROR missing required environment variable STRIPE_SIGNING_SECRET"}'
+```bash
+sentinelops start --profile production
 ```
 
-Investigate:
-```powershell
-Invoke-RestMethod http://127.0.0.1:8000/investigate `
-  -Method POST `
-  -ContentType "application/json" `
-  -Body '{"prompt":"Investigate this network incident using the failing run and the previous healthy run.","candidate_log_paths":["data/logs/network-current.log","data/logs/network-previous.log"],"incident_type_hint":"network"}'
+Production-oriented requirements:
+
+- `auth_mode=oidc`
+- `deployment_mode=production`
+- shared Postgres metadata and workflow checkpoint stores
+- `https://` public base URL
+- OTLP telemetry export
+- managed secrets
+
+Starter company-style Docker stack:
+
+```bash
+docker compose up --build sentinelops-postgres sentinelops-keycloak sentinelops-api
 ```
 
-Workflow:
-```powershell
-Invoke-RestMethod http://127.0.0.1:8000/workflow/investigate `
-  -Method POST `
-  -ContentType "application/json" `
-  -Body '{"thread_id":"ops-database-workflow","prompt":"Investigate this incident using the failing run and the previous healthy run.","candidate_log_paths":["data/logs/database-current.log","data/logs/database-previous.log"],"incident_type_hint":"database","require_approval_for_remediation":true}'
+Stricter override:
+
+```bash
+docker compose -f compose.yaml -f compose.production.yaml up --build sentinelops-api
 ```
 
-Operations proof
-- Full test suite:
-  `uv run pytest -q`
-- Console/API coverage:
-  `uv run pytest -q tests/test_console_surface.py`
-- Runtime coverage:
-  `uv run pytest -q tests/test_runtime_surface.py`
-- Workflow coverage:
-  `uv run pytest -q tests/test_workflow_api.py`
-- Evaluation summary:
-  `uv run python scripts/run_eval_summary.py`
-- Operations report:
-  `uv run python scripts/run_operations_report.py`
-- Live Ollama and Chroma check:
-  `set SENTINELOPS_RUN_LIVE_TESTS=1`
-  `uv run pytest -q tests/test_live_stack.py`
+## Run From Source
 
-Supporting docs
+```bash
+uv sync
+ollama pull mistral:7b-instruct
+ollama pull nomic-embed-text
+uv run sentinelops
+```
+
+Open:
+
+- [http://127.0.0.1:8000/console](http://127.0.0.1:8000/console)
+- [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+
+## Verification
+
+Local verification:
+
+```bash
+uv run pytest -q
+uv run pytest -q tests/test_console_surface.py
+uv run pytest -q tests/test_runtime_surface.py
+uv run pytest -q tests/test_workflow_api.py
+uv run python scripts/run_eval_summary.py
+uv run python scripts/run_operations_report.py
+```
+
+Repo-local acceptance path:
+
+```bash
+sentinelops attach --agent all
+sentinelops paths
+sentinelops doctor
+sentinelops start --no-browser
+```
+
+Live dependency check:
+
+```bash
+set SENTINELOPS_RUN_LIVE_TESTS=1
+uv run pytest -q tests/test_live_stack.py
+```
+
+## Docs
+
 - Architecture: [docs/architecture.md](docs/architecture.md)
+- Repo copilot validation: [docs/repo-copilot-validation.md](docs/repo-copilot-validation.md)
 - Commercial and enterprise usage: [docs/commercial-and-enterprise-usage.md](docs/commercial-and-enterprise-usage.md)
 - Operator walkthrough: [docs/operator-walkthrough.md](docs/operator-walkthrough.md)
-- Incident library notes: [docs/incident-library.md](docs/incident-library.md)
+- Incident library: [docs/incident-library.md](docs/incident-library.md)
 - Video walkthrough: [docs/video-walkthrough.md](docs/video-walkthrough.md)
-- Resume bullets: [docs/resume-bullets.md](docs/resume-bullets.md)
 - Interview story: [docs/interview-story.md](docs/interview-story.md)
+- Resume bullets: [docs/resume-bullets.md](docs/resume-bullets.md)
 
-Project layout
-- `app/` API, services, workflows, static console assets
+## Repo Layout
+
+- `app/` API shell, services, workflow orchestration, static console assets, CLI, and agent integrations
+- `config/` checked-in non-secret app config for local and production profiles
 - `data/incident_library/` packaged incident profiles
-- `data/reference_incidents/` reference incident history
-- `data/runtime/recent_incidents/` runtime incident captures
-- `data/runtime/workflow/` workflow checkpoints
-- `config/` checked-in non-secret app configuration
-- `data/runtime/audit/` local fallback workflow audit trail
-- `docs/` product, architecture, and communication assets
-- `scripts/` local startup and reporting commands
+- `data/knowledge/` packaged runbooks, notes, and reference docs
+- `docs/` architecture, rollout, validation, and communication assets
+- `samples/` starter logs and local demo artifacts
+- `scripts/` installers, startup helpers, and reporting commands
+- `tests/` API, runtime, workflow, and plug-and-play verification coverage
 
-License
-- SentinelOps source in this repository is licensed under Apache-2.0: [LICENSE](LICENSE)
+## License
+
+SentinelOps source in this repository is licensed under Apache-2.0.
+
+- License text: [LICENSE](LICENSE)
+- Distribution notice: [NOTICE](NOTICE)
+- Security guidance: [SECURITY.md](SECURITY.md)
+
+Commercial use still requires review of deployed models, connected data, and third-party services. See [docs/commercial-and-enterprise-usage.md](docs/commercial-and-enterprise-usage.md).

@@ -1,0 +1,9 @@
+SentinelOps
+Copyright 2026 SentinelOps contributors
+
+This repository's application source code is licensed under the Apache License, Version 2.0.
+See LICENSE for the full license text.
+
+Important boundary:
+- The Apache-2.0 license covers the SentinelOps source in this repository.
+- Connected models, data sources, corpora, and third-party services may require additional legal, security, or compliance review before commercial or enterprise use.

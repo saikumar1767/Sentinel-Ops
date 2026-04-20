@@ -1,5 +1,5 @@
 app_name = "SentinelOps"
-app_version = "0.6.0"
+app_version = "0.8.0"
 deployment_mode = "local"
 log_level = "INFO"
 startup_validate_config = true

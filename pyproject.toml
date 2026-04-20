@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sentinel-ops"
-version = "0.6.0"
+version = "0.8.0"
 requires-python = ">=3.11"
 description = "Plug-and-play incident copilot with local and enterprise deployment profiles."
 readme = "README.md"
@@ -54,21 +54,30 @@ packages = ["app"]
 "data/reference_incidents" = "app/_bundled/data/reference_incidents"
 "samples" = "app/_bundled/samples"
 "LICENSE" = "app/_bundled/LICENSE"
+"NOTICE" = "app/_bundled/NOTICE"
 
 [tool.hatch.build.targets.sdist]
 include = [
+    "/.clinerules",
+    "/.cursor",
+    "/.github/copilot-instructions.md",
+    "/.windsurf",
+    "/AGENTS.md",
     "/app",
+    "/CLAUDE.md",
     "/config",
     "/data/incident_library",
     "/data/incident_templates",
     "/data/knowledge",
     "/data/logs",
     "/data/reference_incidents",
+    "/docs/assets",
     "/samples",
     "/scripts",
     "/tests",
-    "/README.md",
     "/LICENSE",
+    "/NOTICE",
+    "/README.md",
     "/SECURITY.md",
     "/compose.yaml",
     "/compose.production.yaml",

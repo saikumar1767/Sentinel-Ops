@@ -2,17 +2,24 @@
 
 ## Purpose
 
-The incident library gives SentinelOps a stable set of operator-ready incident profiles. Each profile includes:
+The incident library gives SentinelOps a stable set of operator-ready profiles that are useful in all three product shapes:
+
+- standalone local console
+- repo-local copilot mode
+- production-shaped shared deployment
+
+Each profile includes:
+
 - the API endpoint to run
-- the exact request payload
-- the expected incident outcome
+- the request payload
+- the expected outcome
 - operator notes and run steps
 
-## Current library
+## Current Library
 
 ### Database Pool Exhaustion Workflow
 
-Best full workflow path. Shows evidence gathering, retrieval, approval pause, and final workflow completion.
+Best full workflow path. Shows evidence gathering, retrieval, approval pause, durable thread state, and final workflow completion.
 
 ### Network DNS Regression Investigation
 
@@ -29,3 +36,12 @@ Best secondary approval example. Shows that approval pauses apply beyond databas
 ### Service Restart With Missing Log Path
 
 Best resilience example. Shows safe tool failure handling without collapsing the investigation.
+
+## Why It Matters In Repo-Local Mode
+
+When SentinelOps is attached to a project repo, the incident library becomes a reusable proving ground:
+
+- incident profiles can be run against repo-local logs
+- the console stays reproducible
+- teams can compare "packaged demo" behavior with "my repo" behavior
+- workflow and approval paths remain inspectable

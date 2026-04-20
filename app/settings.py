@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "SentinelOps"
-    app_version: str = "0.6.0"
+    app_version: str = "0.8.0"
     deployment_mode: Literal["local", "staging", "production"] = "local"
     public_base_url: str | None = None
     workspace_root: Path = PROJECT_ROOT

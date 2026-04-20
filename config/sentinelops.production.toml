@@ -1,5 +1,5 @@
 app_name = "SentinelOps"
-app_version = "0.6.0"
+app_version = "0.8.0"
 deployment_mode = "production"
 public_base_url = "https://sentinelops.example.internal"
 log_level = "INFO"
