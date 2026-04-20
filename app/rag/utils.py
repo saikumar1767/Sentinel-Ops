@@ -65,6 +65,13 @@ def clean_retrieval_snippet_text(text: str) -> str:
     ).strip()
 
 
+def retrieval_source_priority(hit: RetrievalHit) -> int:
+    source_path = hit.source_path.replace("\\", "/").lower()
+    if source_path.startswith(".sentinelops/data/"):
+        return 1
+    return 0
+
+
 def curate_knowledge_search_hits(
     hits: list[RetrievalHit],
     *,
@@ -77,6 +84,7 @@ def curate_knowledge_search_hits(
     ranked = sorted(
         hits,
         key=lambda hit: (
+            retrieval_source_priority(hit),
             _knowledge_search_priority(hit, query),
             -(hit.similarity_score or 0.0),
             hit.citation,

@@ -131,6 +131,7 @@ class KnowledgeBaseService(RetrievalService):
         top_k: int,
         document_types: list[DocumentType] | None = None,
         incident_type_hint: IncidentType | None = None,
+        overfetch_multiplier: int = 1,
     ) -> list[RetrievalHit]:
         started = perf_counter()
         with start_span(
@@ -150,6 +151,7 @@ class KnowledgeBaseService(RetrievalService):
                 top_k=top_k,
                 document_types=document_types,
                 incident_type_hint=incident_type_hint,
+                overfetch_multiplier=overfetch_multiplier,
             )
             if self.settings.retrieval_cache_enabled:
                 cached_hits = self._search_cache.get(cache_key)
@@ -172,9 +174,13 @@ class KnowledgeBaseService(RetrievalService):
                     return cached_hits
 
             embedding = self.embedding_provider.embed_texts([query])[0]
+            raw_top_k = min(
+                self.store.count(),
+                max(top_k * max(overfetch_multiplier, 1), top_k),
+            )
             hits = self.store.query(
                 query_embedding=embedding,
-                top_k=top_k,
+                top_k=raw_top_k,
                 document_types=document_types,
                 incident_type_hint=incident_type_hint,
             )
@@ -214,11 +220,13 @@ class KnowledgeBaseService(RetrievalService):
         top_k: int,
         document_types: list[DocumentType] | None,
         incident_type_hint: IncidentType | None,
+        overfetch_multiplier: int,
     ) -> str:
         payload = {
             "query": query,
             "top_k": top_k,
             "document_types": document_types or [],
             "incident_type_hint": incident_type_hint,
+            "overfetch_multiplier": overfetch_multiplier,
         }
         return json.dumps(payload, sort_keys=True, separators=(",", ":"))

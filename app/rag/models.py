@@ -91,4 +91,5 @@ class RetrievalService(Protocol):
         top_k: int,
         document_types: list[DocumentType] | None = None,
         incident_type_hint: IncidentType | None = None,
+        overfetch_multiplier: int = 1,
     ) -> list[RetrievalHit]: ...

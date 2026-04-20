@@ -23,6 +23,7 @@ from app.rag.models import RetrievalService
 from app.rag.utils import (
     INVESTIGATION_RETRIEVAL_DOCUMENT_TYPES,
     format_retrieval_hits_for_prompt,
+    retrieval_source_priority,
     retrieval_citations,
     retrieval_snippets,
 )
@@ -1001,12 +1002,21 @@ class InvestigationService:
             },
         ) as span:
             try:
-                hits = self.retriever.search(
-                    query=query,
-                    top_k=max(self.settings.retrieval_top_k * 2, 6),
-                    document_types=INVESTIGATION_RETRIEVAL_DOCUMENT_TYPES,
-                    incident_type_hint=incident_type_hint,
-                )
+                search_kwargs = {
+                    "query": query,
+                    "top_k": max(self.settings.retrieval_top_k * 2, 6),
+                    "document_types": INVESTIGATION_RETRIEVAL_DOCUMENT_TYPES,
+                    "incident_type_hint": incident_type_hint,
+                }
+                try:
+                    hits = self.retriever.search(
+                        **search_kwargs,
+                        overfetch_multiplier=4,
+                    )
+                except TypeError as exc:
+                    if "overfetch_multiplier" not in str(exc):
+                        raise
+                    hits = self.retriever.search(**search_kwargs)
             except Exception as exc:
                 logger.warning("investigation retrieval unavailable: %s", exc)
                 set_span_attributes(span, {"investigate.retrieval_status": "unavailable"})
@@ -1015,6 +1025,7 @@ class InvestigationService:
             reranked_hits = sorted(
                 hits,
                 key=lambda hit: (
+                    retrieval_source_priority(hit),
                     _retrieval_section_priority(hit),
                     -(hit.similarity_score or 0.0),
                     hit.citation,
