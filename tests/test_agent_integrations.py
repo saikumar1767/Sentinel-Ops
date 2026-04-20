@@ -61,6 +61,7 @@ def test_install_agent_integrations_generates_codex_bundle(tmp_path, monkeypatch
     agents_text = agents_path.read_text(encoding="utf-8")
     assert "<!-- sentinelops:start -->" in agents_text
     assert "checkout-service" in agents_text
+    assert ".sentinelops/project.toml" in agents_text
 
 
 def test_install_agent_integrations_merges_shared_repo_files(tmp_path, monkeypatch) -> None:

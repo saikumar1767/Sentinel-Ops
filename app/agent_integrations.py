@@ -4,7 +4,13 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.bootstrap import attach_project, read_project_manifest
+from app.bootstrap import (
+    attach_project,
+    project_manifest_doc_roots,
+    project_manifest_log_roots,
+    project_manifest_workspace_name,
+    read_project_manifest,
+)
 
 SUPPORTED_AGENTS = ("codex", "cursor", "windsurf", "cline", "copilot")
 CODEX_PLUGIN_NAME = "sentinelops-copilot"
@@ -49,8 +55,9 @@ def install_agent_integrations(
 
     resolved_project_root, _ = attach_project(project_root=project_root, overwrite=overwrite)
     manifest = read_project_manifest(resolved_project_root)
-    workspace_name = str(manifest.get("workspace_name") or resolved_project_root.name)
-    log_roots = _manifest_log_roots(manifest)
+    workspace_name = project_manifest_workspace_name(manifest, fallback=resolved_project_root.name)
+    log_roots = project_manifest_log_roots(manifest)
+    doc_roots = project_manifest_doc_roots(manifest)
     selected_agents = SUPPORTED_AGENTS if agent == "all" else (agent,)
 
     generated_files: dict[Path, GeneratedFile] = {}
@@ -82,7 +89,7 @@ def install_agent_integrations(
             existing_text=_read_text_if_exists(resolved_project_root / "AGENTS.md"),
             start_marker=AGENTS_START_MARKER,
             end_marker=AGENTS_END_MARKER,
-            block=_agents_block(workspace_name=workspace_name, log_roots=log_roots),
+            block=_agents_block(workspace_name=workspace_name, log_roots=log_roots, doc_roots=doc_roots),
         ),
         shared_file=True,
     )
@@ -117,15 +124,6 @@ def _write_files(
         written.append(path)
 
     return written, skipped
-
-
-def _manifest_log_roots(manifest: dict[str, object]) -> list[str]:
-    value = manifest.get("log_roots")
-    if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
-    if isinstance(value, str) and value.strip():
-        return [value.strip()]
-    return ["logs", "log", "data/logs", "var/log"]
 
 
 def _codex_bundle_files(project_root: Path, *, workspace_name: str) -> dict[Path, GeneratedFile]:
@@ -303,7 +301,7 @@ Start with SentinelOps context instead of guessing from code alone.
 
 ## Guardrails
 
-- Treat `.sentinelops/project.toml` as the local source of truth for workspace name and repo log roots.
+- Treat `.sentinelops/project.toml` as the local source of truth for workspace name, logs, docs, models, runtime host, and storage paths.
 - Prefer repo-relative operational evidence before falling back to generic advice.
 - If `sentinelops doctor` reports Ollama unavailable, explain that model-backed investigate or analyze paths need a reachable model host such as `ollama serve`.
 - Do not assume production auth, shared databases, or telemetry are enabled unless SentinelOps config says so.
@@ -435,8 +433,9 @@ If model-backed investigation is unavailable, explain that SentinelOps needs a r
 """
 
 
-def _agents_block(*, workspace_name: str, log_roots: list[str]) -> str:
+def _agents_block(*, workspace_name: str, log_roots: list[str], doc_roots: list[str]) -> str:
     log_lines = "\n".join(f"- `{log_root}`" for log_root in log_roots)
+    doc_lines = "\n".join(f"- `{doc_root}`" for doc_root in doc_roots)
     return f"""{AGENTS_START_MARKER}
 # SentinelOps
 
@@ -445,8 +444,11 @@ SentinelOps is attached to this repository as a repo-local operations copilot fo
 - Read `.sentinelops/agent-context.md` when tasks involve incidents, logs, runbooks, deploy health, readiness, or remediation.
 - Start with `sentinelops paths`.
 - Run `sentinelops doctor` before assuming model-backed investigation is ready.
+- Treat `.sentinelops/project.toml` as the repo-local source of truth for workspace resources and runtime defaults.
 - Prefer repository operational evidence and these log roots before giving generic advice:
 {log_lines}
+- Prefer these configured doc roots and deployment surfaces when gathering context:
+{doc_lines}
 {AGENTS_END_MARKER}
 """
 

@@ -44,6 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     attach_parser.add_argument("--project-root", type=Path, default=None)
     attach_parser.add_argument("--name", default=None)
     attach_parser.add_argument("--log-root", action="append", default=[])
+    attach_parser.add_argument("--doc-root", action="append", default=[])
     attach_parser.add_argument("--agent", choices=agent_choices, default=None)
     attach_parser.add_argument("--overwrite", action="store_true")
 
@@ -94,10 +95,12 @@ def main(argv: list[str] | None = None) -> int:
                 project_root=args.project_root,
                 workspace_name=args.name,
                 log_roots=args.log_root,
+                doc_roots=args.doc_root,
                 overwrite=args.overwrite,
             )
             print(f"SentinelOps attached to {project_root}")
             print(f"Project home: {home}")
+            print(f"Project config: {project_root / '.sentinelops' / 'project.toml'}")
             if args.agent:
                 result = install_agent_integrations(
                     project_root=project_root,
@@ -207,6 +210,8 @@ def _doctor_command(*, profile: str, app_home: Path | None, project_root: Path |
     if "workspace_root" in summary:
         print(f"workspace_root: {summary['workspace_root']}")
         print(f"workspace_name: {summary['workspace_name']}")
+        print(f"project_mode: {summary['project_mode']}")
+        print(f"project_manifest: {summary['project_manifest']}")
     print(f"config_file: {summary['config_file']}")
     print(f"ready: {report.ready}")
     print(f"status: {report.status}")
