@@ -1,6 +1,16 @@
 # Security Notes
 
-SentinelOps is designed to operate on sensitive operational data. Treat the local and repo-local modes as convenience surfaces, not proof that production hardening is complete.
+SentinelOps is designed to operate on sensitive operational data. The local-first repo mode is the primary product path, but shared production hardening is still a separate concern.
+
+## Local-first Baseline
+
+For one engineer using SentinelOps on one office PC inside their own repositories:
+
+- `auth_mode=disabled` is expected
+- `.sentinelops/project.toml` is the repo-local control file
+- runtime state stays repo-local unless the user configures shared infrastructure
+
+This mode is meant to be simple, but it still needs sane secrets hygiene and careful handling of logs and retrieved documents.
 
 ## Recommended Production Baseline
 

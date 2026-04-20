@@ -1,170 +1,274 @@
 # SentinelOps Architecture
 
-## Product Shape
+## Design Goal
 
-SentinelOps now has three first-class operating modes:
+SentinelOps is designed to feel simple on an individual engineer's machine and still preserve a clean path to a stricter shared deployment later.
 
-- standalone local operator console
-- repo-local operations copilot inside any project
-- production-shaped internal deployment with identity, shared persistence, and telemetry guardrails
+The primary design choice is:
 
-That means the architecture is no longer only "API plus local model runtime." It is also:
+- local-first by default
+- one repo-local control file
+- safe file and workflow boundaries
+- optional shared mode only when a team truly needs it
 
-- a CLI product (`sentinelops`)
-- a repo attachment system (`sentinelops attach`)
-- a generated agent/editor integration layer (`sentinelops install-agent`)
+## Operating Modes
 
-## Problem
+| Mode | Primary user | Default auth | Default storage | Why it exists |
+| --- | --- | --- | --- | --- |
+| `personal` | One engineer on one office PC | disabled | repo-local `.sentinelops/` | Fast plug-and-play use inside that engineer's own repositories |
+| `shared` | Multi-user internal rollout | OIDC | shared Postgres and centralized telemetry | Team-wide deployment, governance, and centralized operations |
 
-SentinelOps helps an operator or engineering team move from raw evidence to a grounded response quickly:
+The rest of this document is organized around the local-first path first, then the optional shared overlay.
 
-- classify the incident
-- gather safe evidence from logs and repo files
-- retrieve supporting runbooks and operational notes
-- generate structured summaries or remediation plans
-- pause for approval before sensitive remediation work completes
-
-## Why this architecture works
-
-The system is designed to stay practical on constrained hardware without giving up a path to company-ready deployment:
-
-- the CLI makes install and repo attachment repeatable
-- Ollama stays outside Docker for simpler local GPU access
-- FastAPI owns transport, contracts, and the console/API surface
-- the knowledge layer can read packaged knowledge and repo-local documents
-- LangGraph is used where checkpoints and approval pauses add real value
-- generated agent/editor files make the repo-local copilot mode portable
-
-## System View
+## High-level Product Map
 
 ```mermaid
 flowchart LR
-    User["Developer / Operator"] --> Agent["Editor / Agent Layer"]
-    Agent --> Files["AGENTS.md / Repo Rules / Copilot Instructions"]
-    User --> CLI["SentinelOps CLI"]
-    CLI --> Attach["Repo Attachment + Bootstrap"]
-    Attach --> Project[".sentinelops Workspace"]
-    CLI --> API["FastAPI API Shell"]
-    API --> Console["Operations Console"]
+    Engineer["Engineer In Attached Repo"] --> CLI["sentinelops CLI"]
+    subgraph Repo["Attached Project"]
+        Manifest[".sentinelops/project.toml"]
+        AgentContext[".sentinelops/agent-context.md"]
+        Rules["AGENTS.md / Copilot / Cursor / Windsurf / Codex"]
+        Docs["README / Docs / Runbooks / Workflows"]
+        Logs["Configured Log Roots"]
+    end
+    CLI --> Manifest
+    CLI --> AgentContext
+    CLI --> Rules
+    CLI --> API["FastAPI App"]
+    API --> Console["Operator Console"]
     API --> Analyze["Analyze Service"]
     API --> Investigate["Investigation Service"]
     API --> Workflow["Workflow Service"]
+    Analyze --> Docs
+    Investigate --> Docs
+    Investigate --> Logs
+    Workflow --> Docs
+    Workflow --> Logs
     Analyze --> Ollama["Ollama"]
     Investigate --> Ollama
     Workflow --> Ollama
-    Investigate --> Tools["Safe Local Tools"]
-    Workflow --> Tools
-    Analyze --> Retrieval["Knowledge Base Service"]
-    Investigate --> Retrieval
-    Workflow --> Retrieval
-    Retrieval --> Packaged["Packaged Knowledge + Incident Library"]
-    Retrieval --> RepoDocs["Repo Docs + Runbooks + Workflows"]
-    Workflow --> Checkpoints["SQLite or Postgres Checkpoints"]
-    Workflow --> Audit["SQLite or Postgres Audit Trail"]
-    API --> Metrics["Health / Metrics / Telemetry"]
+    Workflow --> RuntimeState["Repo-local Runtime State"]
 ```
 
-## Core Layers
+## Repository Architecture
 
-### CLI and bootstrap layer
+This is how the repository is laid out at a product level.
 
-The CLI turns SentinelOps into an installable product:
+```mermaid
+flowchart TB
+    Root["SentinelOps Repository"]
+    Root --> App["app/"]
+    App --> Routers["api/routers"]
+    App --> Services["services/"]
+    App --> Retrieval["rag/"]
+    App --> CLI["cli.py"]
+    App --> Bootstrap["bootstrap.py"]
+    App --> Integrations["agent_integrations.py"]
+    App --> Workflows["workflows/"]
+    Root --> Config["config/"]
+    Root --> Data["data/"]
+    Root --> Docs["docs/"]
+    Root --> Scripts["scripts/"]
+    Root --> Tests["tests/"]
+```
 
-- `sentinelops` starts the app
-- `sentinelops attach` bootstraps `.sentinelops/` inside a repo
-- `sentinelops install-agent` generates repo-local agent/editor integrations
-- `sentinelops doctor` validates readiness
-- `sentinelops paths` prints the active workspace contract
+## Repo-local Control Plane
 
-### API shell
+The repo-local control plane is intentionally narrow. Instead of scattering project-specific runtime knowledge across multiple hidden files, SentinelOps keeps that contract in `.sentinelops/project.toml`.
 
-FastAPI handles:
+That file controls:
 
-- route definitions
-- OpenAPI docs
-- problem-detail errors
-- readiness and metrics endpoints
-- the operations console entrypoint
-- auth/RBAC boundary integration
+- workspace name
+- mode
+- doc roots
+- log roots
+- default models
+- Ollama host
+- repo-local storage paths
 
-### Analysis layer
+### Attach and bootstrap flow
 
-`/analyze` is the fast path:
+```mermaid
+flowchart LR
+    Repo["Developer Repo"] --> Attach["sentinelops attach --agent all"]
+    Attach --> Detect["Detect repo markers, docs, deploy files, logs"]
+    Detect --> Manifest["Write .sentinelops/project.toml"]
+    Detect --> Context["Write .sentinelops/agent-context.md"]
+    Detect --> Ignore["Update .gitignore"]
+    Detect --> AgentRules["Generate repo-local agent/editor files"]
+    Manifest --> Start["sentinelops"]
+    Start --> Runtime["Apply runtime env from project config"]
+    Runtime --> App["FastAPI app + console"]
+```
 
-- accept pasted log text
-- retrieve supporting evidence when available
-- return structured JSON for quick triage
+### Why this matters
 
-### Investigation layer
+- install flow stays repeatable
+- the project itself declares what SentinelOps should read
+- engineers can adjust resources without editing product code
+- generated agent files can point back to one shared contract
 
-`/investigate` is the one-shot operator path:
+## Request-processing Architecture
 
-- read repo-local or configured logs
-- compare current versus previous runs
-- retrieve knowledge from packaged and repo-local sources
-- produce grounded next steps
+SentinelOps has three main operational paths.
 
-### Workflow layer
+### 1. Analyze path
 
-`/workflow/*` is the durable copilot path:
+`POST /analyze` is the fast triage route for pasted evidence.
 
-- checkpoint state in SQLite or Postgres
-- expose thread inspection
-- pause for approval when remediation is risky
-- persist audit events for approve, reject, and resume
+```mermaid
+flowchart LR
+    Request["Analyze Request"] --> Router["FastAPI Router"]
+    Router --> AnalyzeService["Analyze Service"]
+    AnalyzeService --> Retrieval["Knowledge Base Service"]
+    AnalyzeService --> Ollama["Ollama Gateway"]
+    Retrieval --> RepoDocs["Repo Docs + Packaged Knowledge"]
+    Ollama --> Response["Structured JSON Response"]
+```
 
-### Repo-local integration layer
+### 2. Investigate path
 
-This layer is what makes SentinelOps plug-and-play inside another project:
+`POST /investigate` is the repo-aware operator route.
 
-- `.sentinelops/project.toml` stores the workspace contract
-- `.sentinelops/agent-context.md` gives a shared repo-local briefing
-- `AGENTS.md`, Copilot instructions, Cursor rules, Windsurf rules, Cline rules, and the Codex plugin bundle are generated from that contract
+```mermaid
+flowchart LR
+    Request["Investigate Request"] --> Router["FastAPI Router"]
+    Router --> InvestigateService["Investigation Service"]
+    InvestigateService --> FileTools["Safe File Tools"]
+    InvestigateService --> Retrieval["Knowledge Loader + Store"]
+    InvestigateService --> Ollama["Ollama Gateway"]
+    FileTools --> Logs["Configured Log Roots"]
+    Retrieval --> RepoDocs["Configured Doc Roots"]
+    Ollama --> Response["Grounded Investigation Response"]
+```
 
-### Console layer
+### 3. Workflow path
 
-The console adds:
+`/workflow/*` is the durable, approval-aware route.
 
-- a live operations console
-- an incident library
-- a saved incident timeline
-- an overview built from deterministic evaluation results
+```mermaid
+flowchart LR
+    WorkflowRequest["Workflow Request"] --> Router["FastAPI Router"]
+    Router --> WorkflowService["Workflow Service"]
+    WorkflowService --> Graph["LangGraph"]
+    Graph --> FileTools["Safe File Tools"]
+    Graph --> Retrieval["Knowledge Loader + Store"]
+    Graph --> Ollama["Ollama Gateway"]
+    WorkflowService --> Checkpoints["Checkpoint Store"]
+    WorkflowService --> Audit["Audit Trail"]
+    WorkflowService --> ThreadStore["Thread Metadata Store"]
+    Graph --> Response["Workflow Snapshot / Approval State"]
+```
 
-## Main Design Decisions
+## Data and Storage Architecture
 
-### 1. Repo-local context beats global guessing
+The runtime pulls from two broad sources:
 
-The product now treats the attached repository as the primary source of operational truth. That makes the copilot useful to engineers inside their own projects instead of only inside a dedicated demo workspace.
+- project-scoped operational context
+- packaged SentinelOps knowledge and fixtures
 
-### 2. Retrieval is supportive, not magical
+```mermaid
+flowchart LR
+    Manifest[".sentinelops/project.toml"] --> Settings["Pydantic Settings"]
+    Settings --> LogRoots["allowed_log_roots"]
+    Settings --> DocRoots["workspace_doc_roots"]
+    Settings --> Models["analyze / investigate / embedding models"]
+    Settings --> Storage["storage paths"]
+    DocRoots --> Loader["KnowledgeDocumentLoader"]
+    LogRoots --> Tools["FileTools"]
+    Storage --> Incidents["recent incidents"]
+    Storage --> Workflow["workflow checkpoints"]
+    Storage --> Audit["audit DB"]
+    Storage --> Index["knowledge index / chroma"]
+```
 
-SentinelOps still works when retrieval is unavailable. The system degrades safely and marks retrieval status clearly.
+### Packaged data versus attached project data
 
-### 3. Workflow before autonomy
+| Source | Role |
+| --- | --- |
+| `data/knowledge/` | packaged runbooks and reference knowledge |
+| `data/incident_library/` | packaged incident profiles |
+| `data/reference_incidents/` | packaged examples for comparison and evaluation |
+| attached repo doc roots | project-specific operational context |
+| attached repo log roots | project-specific live or recent evidence |
 
-The workflow is controlled and approval-aware. It is designed to be inspectable and safe, not autonomous for the sake of sounding advanced.
+## Agent and Editor Integration Architecture
 
-### 4. Product surfaces are part of the architecture
+Generated integrations are product surfaces, not side artifacts.
 
-The CLI, console, incident library, timeline, evals, installer scripts, docs, and generated agent integrations are part of the product surface, not afterthoughts.
+```mermaid
+flowchart LR
+    Manifest[".sentinelops/project.toml"] --> AgentContext[".sentinelops/agent-context.md"]
+    Manifest --> AGENTS["AGENTS.md block"]
+    Manifest --> Codex["Codex plugin bundle"]
+    Manifest --> Cursor["Cursor rule"]
+    Manifest --> Windsurf["Windsurf rule"]
+    Manifest --> Cline["Cline rule"]
+    Manifest --> Copilot["Copilot instructions block"]
+```
 
-## Operational Proof
+The contract is simple:
 
-Strong proof points in the repo:
+- SentinelOps writes the repo-local config and context
+- generated tools point back to those files
+- shared files are merged, not blindly overwritten
 
-- deterministic eval summary via `/eval/summary`
-- incident library via `/console/incidents`
-- incident timeline via `/console/timeline`
-- runtime metrics via `/metrics`
-- repo-local integration coverage in `tests/test_agent_integrations.py`
-- live Ollama and Chroma coverage in `tests/test_live_stack.py`
+## Shared-mode Overlay
 
-## Production Gaps That Still Matter
+Shared mode is intentionally a second layer, not the default product assumption.
 
-SentinelOps now has a stronger repo-local and production foundation, but company-wide rollout still needs:
+```mermaid
+flowchart LR
+    User["Team User"] --> Ingress["HTTPS Ingress"]
+    Ingress --> API["SentinelOps API"]
+    API --> OIDC["OIDC Auth"]
+    API --> Postgres["Shared Postgres"]
+    API --> Telemetry["OTLP / Logs / Alerts"]
+    API --> Ollama["Model Runtime"]
+```
 
-- managed identity and secrets
-- centralized tracing and logs
-- background workers for long-running analysis
-- policy-gated action execution
-- stronger governance for retention, PII handling, and model/legal review
+Use shared mode only when you need:
+
+- one deployment for multiple users
+- centralized approvals
+- centralized audit history
+- shared operational dashboards
+
+## Design Decisions
+
+### 1. Local-first is the default product, not the demo mode
+
+The easiest real use case is one engineer attaching SentinelOps to one repo on one PC. The architecture now treats that as the main product path.
+
+### 2. One repo config beats scattered hidden behavior
+
+`.sentinelops/project.toml` is the local control plane so engineers can see and edit what SentinelOps reads and stores.
+
+### 3. Retrieval is explicit and bounded
+
+SentinelOps favors configured repo docs, known deploy files, and safe log roots over broad filesystem scanning or generic guesswork.
+
+### 4. Workflow stays inspectable
+
+Durable workflow state, approval pauses, and auditability matter more than pretending the product is fully autonomous.
+
+### 5. Shared mode is an overlay
+
+OIDC, shared Postgres, and telemetry remain supported, but only for deployments that actually need them.
+
+## What Still Remains
+
+For the local-first product:
+
+- richer project-config validation in `doctor`
+- background workers for long-running jobs
+- more built-in integrations for real project systems
+- stronger policy-gated action execution
+
+For the shared overlay:
+
+- fully managed identity bootstrap
+- formal database migrations and restore drills
+- centralized logs, traces, dashboards, and alerts
+- governance for retention, redaction, and internal legal/security review

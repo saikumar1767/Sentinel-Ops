@@ -11,11 +11,12 @@ The repo-local experience is acceptable only if all of these are true:
 1. A user can install `sentinelops` without cloning this repo.
 2. A user can run `sentinelops attach --agent all` inside a fresh repo.
 3. SentinelOps creates `.sentinelops/`, repo agent context, and generated agent/editor files.
-4. `sentinelops paths` reports the attached workspace correctly.
-5. `sentinelops doctor` reports readiness clearly.
-6. `sentinelops start --no-browser` boots the API and console successfully.
-7. Health and docs routes respond.
-8. Analysis, investigation, and workflow routes can be exercised against a realistic dummy repo scenario.
+4. `.sentinelops/project.toml` contains the repo-local control contract for docs, logs, models, runtime host, and storage.
+5. `sentinelops paths` reports the attached workspace correctly.
+6. `sentinelops doctor` reports readiness clearly.
+7. `sentinelops start --no-browser` boots the API and console successfully.
+8. Health and docs routes respond.
+9. Analysis, investigation, and workflow routes can be exercised against a realistic dummy repo scenario.
 
 ## Golden Validation Flow
 
@@ -59,6 +60,12 @@ Expected results:
 - `plugins/sentinelops-copilot/`
 - editor rule files for supported agents
 
+Optional repo-specific overrides:
+
+```bash
+sentinelops attach --log-root services/api/logs --doc-root docs --doc-root runbooks
+```
+
 ### 4. Confirm the workspace contract
 
 ```bash
@@ -70,6 +77,8 @@ Expected results:
 
 - the workspace root points to the dummy repo
 - the runtime home is repo-local
+- `project_mode` reports `personal`
+- the reported doc roots and log roots match `.sentinelops/project.toml`
 - readiness clearly explains whether the model host is reachable
 
 ### 5. Start SentinelOps
@@ -99,6 +108,7 @@ Recommended sequence:
 
 - shared generated files are merged, not blindly replaced
 - dedicated generated files are only replaced with `--overwrite`
+- `.sentinelops/project.toml` is sufficient to understand what SentinelOps will read and where it will store runtime state
 - health and readiness surfaces explain missing dependencies clearly
 - the app works both as a standalone product and as a repo-local copilot
 - production requirements remain explicit instead of being hidden behind a fake "enterprise-ready" claim

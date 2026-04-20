@@ -35,7 +35,6 @@ class KnowledgeDocumentLoader:
         seen_source_paths: set[str] = set()
 
         for document in (
-            *self._load_project_readme(),
             *self._load_workspace_documents(),
             *self._load_knowledge_directory(),
             *self._load_incident_templates(),
@@ -47,20 +46,6 @@ class KnowledgeDocumentLoader:
             documents.append(document)
 
         return sorted(documents, key=lambda document: document.source_path.lower())
-
-    def _load_project_readme(self) -> list[KnowledgeDocument]:
-        readme_path = self.settings.workspace_root / "README.md"
-        if not readme_path.is_file():
-            return []
-        return [
-            KnowledgeDocument(
-                document_id=self._document_id(self.settings.workspace_relative_path(readme_path)),
-                source_path=self.settings.workspace_relative_path(readme_path),
-                document_type="readme",
-                title=f"{self.settings.effective_workspace_name} README",
-                content=readme_path.read_text(encoding="utf-8"),
-            )
-        ]
 
     def _load_workspace_documents(self) -> list[KnowledgeDocument]:
         workspace_root = self.settings.workspace_root
@@ -204,18 +189,29 @@ class KnowledgeDocumentLoader:
     def _iter_workspace_documents(self, workspace_root: Path) -> list[Path]:
         candidates: list[Path] = []
         ignore_dirs = {entry.lower() for entry in self.settings.workspace_ignore_dirs}
+        seen_paths: set[Path] = set()
 
-        for root, dirs, files in os.walk(workspace_root, topdown=True):
-            root_path = Path(root)
-            if root_path != workspace_root and root_path.name.lower() == ".sentinelops":
-                dirs[:] = []
+        for configured_root in self.settings.effective_workspace_doc_root_paths():
+            if not configured_root.exists():
                 continue
 
-            dirs[:] = [name for name in dirs if name.lower() not in ignore_dirs]
-            for file_name in files:
-                path = root_path / file_name
-                if self._is_workspace_document(workspace_root, path):
-                    candidates.append(path)
+            if configured_root.is_file():
+                if self._is_workspace_document(workspace_root, configured_root):
+                    seen_paths.add(configured_root.resolve())
+                continue
+
+            for root, dirs, files in os.walk(configured_root, topdown=True):
+                root_path = Path(root)
+                if root_path != workspace_root and root_path.name.lower() == ".sentinelops":
+                    dirs[:] = []
+                    continue
+
+                dirs[:] = [name for name in dirs if name.lower() not in ignore_dirs]
+                for file_name in files:
+                    path = root_path / file_name
+                    if self._is_workspace_document(workspace_root, path):
+                        seen_paths.add(path.resolve())
+        candidates.extend(seen_paths)
         return sorted(candidates)
 
     def _is_workspace_document(self, workspace_root: Path, path: Path) -> bool:
