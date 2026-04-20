@@ -9,7 +9,30 @@ The repository now includes:
 - a default model/config policy aimed at commercially friendlier self-hosted components
 - production startup validation that rejects unsafe production profiles
 - repo-local copilot installation and generated agent/editor integrations
+- a single repo-local project config in `.sentinelops/project.toml`
 - shared Postgres-capable metadata persistence and Postgres-backed workflow checkpoint support
+
+## Personal Mode Versus Shared Mode
+
+SentinelOps now has two practical operating shapes:
+
+### Personal mode
+
+- local-first on one engineer's machine
+- repo-local `.sentinelops/project.toml` as the main control file
+- auth disabled by default
+- repo-local runtime state
+
+This is the correct shape when each engineer installs SentinelOps on their own office PC for their own repositories.
+
+### Shared mode
+
+- one deployment for multiple users
+- shared persistence
+- OIDC and stronger governance
+- centralized telemetry and backups
+
+This is optional. It is not required to use SentinelOps as a local repo copilot.
 
 ## What The Repo Does Not Magically Solve
 
@@ -61,6 +84,11 @@ That is useful, but it also raises the importance of:
 - The application license covers SentinelOps source in this repository.
 - It does not replace review of deployed models or internal company data use.
 - It does not create indemnity, compliance certification, or legal sign-off.
+
+## Practical Bottom Line
+
+- If each engineer runs SentinelOps locally in their own repo, login is not required and the local-first path is the intended product shape.
+- If a company later wants one shared SentinelOps deployment, auth, shared storage, and stronger operational controls become mandatory.
 
 ## Recommended Reading
 

@@ -27,6 +27,16 @@ DEFAULT_WORKSPACE_IGNORE_DIRS = [
     ".next",
     ".turbo",
 ]
+DEFAULT_WORKSPACE_DOC_ROOTS = [
+    "README.md",
+    "docs",
+    "runbooks",
+    "ops",
+    "deploy",
+    "k8s",
+    "helm",
+    ".github/workflows",
+]
 
 
 def _parse_list_like(value: object) -> object:
@@ -57,6 +67,7 @@ class Settings(BaseSettings):
     workspace_root: Path = PROJECT_ROOT
     workspace_name: str | None = None
     workspace_ignore_dirs: list[str] = Field(default_factory=lambda: list(DEFAULT_WORKSPACE_IGNORE_DIRS))
+    workspace_doc_roots: list[str] = Field(default_factory=lambda: list(DEFAULT_WORKSPACE_DOC_ROOTS))
     log_level: Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"] = "INFO"
     startup_validate_config: bool = True
     telemetry_enabled: bool = False
@@ -174,6 +185,7 @@ class Settings(BaseSettings):
         "auth_admin_roles",
         "commercially_reviewed_model_prefixes",
         "workspace_ignore_dirs",
+        "workspace_doc_roots",
         mode="before",
     )
     @classmethod
@@ -262,6 +274,18 @@ class Settings(BaseSettings):
         if self.workspace_name:
             return self.workspace_name
         return self.workspace_root.name or self.app_name
+
+    def effective_workspace_doc_root_paths(self) -> list[Path]:
+        resolved_roots: list[Path] = []
+        seen: set[Path] = set()
+        for root in self.workspace_doc_roots:
+            candidate = Path(root).expanduser()
+            resolved = candidate.resolve() if candidate.is_absolute() else (self.workspace_root / candidate).resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            resolved_roots.append(resolved)
+        return resolved_roots
 
     def workspace_relative_path(self, path: Path) -> str:
         resolved = path.resolve()
