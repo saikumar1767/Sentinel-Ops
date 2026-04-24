@@ -74,8 +74,8 @@ class Settings(BaseSettings):
     telemetry_service_name: str = "sentinelops-api"
     telemetry_exporter: Literal["none", "console", "otlp"] = "none"
     telemetry_otlp_endpoint: str | None = None
-    analyze_model: str = "mistral:7b-instruct"
-    investigate_model: str = "mistral:7b-instruct"
+    analyze_model: str = "mistral"
+    investigate_model: str = "mistral"
     ollama_host: str = "http://localhost:11434"
     ollama_timeout_seconds: int = Field(default=120, ge=10, le=600)
     ollama_max_retries: int = Field(default=2, ge=0, le=5)

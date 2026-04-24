@@ -8,6 +8,7 @@ For one engineer using SentinelOps on one office PC inside their own repositorie
 
 - `auth_mode=disabled` is expected
 - `.sentinelops/project.toml` is the repo-local control file
+- `sentinelops pull-models` can bootstrap the reviewed local model set without manual Ollama commands
 - runtime state stays repo-local unless the user configures shared infrastructure
 
 This mode is meant to be simple, but it still needs sane secrets hygiene and careful handling of logs and retrieved documents.

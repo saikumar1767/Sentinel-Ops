@@ -12,11 +12,13 @@ from app.bootstrap import (
     read_project_manifest,
 )
 
-SUPPORTED_AGENTS = ("codex", "cursor", "windsurf", "cline", "copilot")
+SUPPORTED_AGENTS = ("claude", "codex", "cursor", "windsurf", "cline", "copilot")
 CODEX_PLUGIN_NAME = "sentinelops-copilot"
 CODEX_SKILL_NAME = "project-ops-copilot"
 AGENTS_START_MARKER = "<!-- sentinelops:start -->"
 AGENTS_END_MARKER = "<!-- sentinelops:end -->"
+CLAUDE_START_MARKER = "<!-- sentinelops:claude:start -->"
+CLAUDE_END_MARKER = "<!-- sentinelops:claude:end -->"
 COPILOT_START_MARKER = "<!-- sentinelops:copilot:start -->"
 COPILOT_END_MARKER = "<!-- sentinelops:copilot:end -->"
 
@@ -61,6 +63,15 @@ def install_agent_integrations(
     selected_agents = SUPPORTED_AGENTS if agent == "all" else (agent,)
 
     generated_files: dict[Path, GeneratedFile] = {}
+    if "claude" in selected_agents:
+        generated_files.update(
+            _claude_bundle_files(
+                resolved_project_root,
+                workspace_name=workspace_name,
+                log_roots=log_roots,
+                doc_roots=doc_roots,
+            )
+        )
     if "codex" in selected_agents:
         generated_files.update(_codex_bundle_files(resolved_project_root, workspace_name=workspace_name))
     if "cursor" in selected_agents:
@@ -148,6 +159,42 @@ def _codex_bundle_files(project_root: Path, *, workspace_name: str) -> dict[Path
         plugin_root / "commands" / "check-sentinelops.md": GeneratedFile(_command_check()),
         plugin_root / "commands" / "investigate-ops.md": GeneratedFile(_command_investigate()),
         plugin_root / "agents" / "openai.yaml": GeneratedFile(_plugin_openai_yaml()),
+    }
+
+
+def _claude_bundle_files(
+    project_root: Path,
+    *,
+    workspace_name: str,
+    log_roots: list[str],
+    doc_roots: list[str],
+) -> dict[Path, GeneratedFile]:
+    claude_root = project_root / ".claude"
+    return {
+        claude_root / "skills" / "sentinelops-check" / "SKILL.md": GeneratedFile(_claude_skill_check()),
+        claude_root / "skills" / "sentinelops-start" / "SKILL.md": GeneratedFile(_claude_skill_start()),
+        claude_root / "skills" / "sentinelops-investigate" / "SKILL.md": GeneratedFile(
+            _claude_skill_investigate()
+        ),
+        claude_root / "skills" / "sentinelops-pull-models" / "SKILL.md": GeneratedFile(
+            _claude_skill_pull_models()
+        ),
+        claude_root / "agents" / "sentinelops-ops-copilot.md": GeneratedFile(
+            _claude_subagent(workspace_name=workspace_name)
+        ),
+        project_root / "CLAUDE.md": GeneratedFile(
+            _merge_marked_block(
+                existing_text=_read_text_if_exists(project_root / "CLAUDE.md"),
+                start_marker=CLAUDE_START_MARKER,
+                end_marker=CLAUDE_END_MARKER,
+                block=_claude_memory_block(
+                    workspace_name=workspace_name,
+                    log_roots=log_roots,
+                    doc_roots=doc_roots,
+                ),
+            ),
+            shared_file=True,
+        ),
     }
 
 
@@ -371,6 +418,142 @@ Use SentinelOps as the first operational copilot for this repository.
 """
 
 
+def _claude_memory_block(*, workspace_name: str, log_roots: list[str], doc_roots: list[str]) -> str:
+    log_lines = "\n".join(f"- `{log_root}`" for log_root in log_roots)
+    doc_lines = "\n".join(f"- `{doc_root}`" for doc_root in doc_roots)
+    return f"""{CLAUDE_START_MARKER}
+# SentinelOps Repo Context
+
+SentinelOps is attached to this repository as a repo-local operations copilot for `{workspace_name}`.
+
+## Start Here
+
+- Read `.sentinelops/agent-context.md` when the task touches incidents, logs, runbooks, readiness, deployment health, or remediation.
+- Use `sentinelops paths` before assuming workspace details.
+- Use `sentinelops doctor` before depending on model-backed analyze or investigate flows.
+- Treat `.sentinelops/project.toml` as the single repo-local control file for docs, logs, models, runtime hosts, retrieval backend settings, and local storage paths.
+
+## Preferred Skills
+
+- `/sentinelops-check`
+- `/sentinelops-start`
+- `/sentinelops-investigate`
+- `/sentinelops-pull-models`
+
+## Repo Roots To Prefer
+
+Log roots:
+{log_lines}
+
+Document roots:
+{doc_lines}
+{CLAUDE_END_MARKER}
+"""
+
+
+def _claude_skill_check() -> str:
+    return """---
+name: sentinelops-check
+description: Check SentinelOps workspace context and readiness for the current repository. Use when a task involves incidents, logs, runbooks, deployment health, or when the user asks whether SentinelOps is ready.
+allowed-tools: Bash Read Grep Glob
+---
+
+# SentinelOps Check
+
+1. Read `.sentinelops/agent-context.md`.
+2. Run `sentinelops paths`.
+3. Run `sentinelops doctor`.
+4. Summarize:
+   - workspace root and workspace name
+   - project manifest path
+   - configured doc roots and log roots
+   - active models and retrieval backend
+   - anything missing or degraded
+
+If Ollama is reachable but models are missing, tell the user to run `/sentinelops-pull-models`.
+"""
+
+
+def _claude_skill_start() -> str:
+    return """---
+name: sentinelops-start
+description: Start SentinelOps for the current repository and confirm the API and console are reachable.
+disable-model-invocation: true
+allowed-tools: Bash
+---
+
+# SentinelOps Start
+
+1. Run `sentinelops paths`.
+2. Run `sentinelops doctor`.
+3. If models are missing, tell the user to run `/sentinelops-pull-models` before relying on analyze or investigate.
+4. Start SentinelOps with `sentinelops start --no-browser`.
+5. Confirm the runtime by checking `/health` and `/ready` if useful.
+6. Summarize the console URL and any remaining runtime blockers.
+"""
+
+
+def _claude_skill_investigate() -> str:
+    return """---
+name: sentinelops-investigate
+description: Use SentinelOps as the first repo-local copilot for incidents, log analysis, runbook lookup, deployment health checks, and remediation workflow guidance.
+allowed-tools: Bash Read Grep Glob
+---
+
+# SentinelOps Investigate
+
+When the user asks about incidents, logs, readiness, deployment failures, or runbooks:
+
+1. Read `.sentinelops/agent-context.md`.
+2. Run `sentinelops paths`.
+3. Run `sentinelops doctor` if readiness or live model-backed investigation matters.
+4. Prefer the repo-specific docs, runbooks, deploy files, and log roots listed by SentinelOps over generic advice.
+5. If live API context helps, start SentinelOps with `sentinelops start --no-browser`.
+6. Ground conclusions in:
+   - repo logs
+   - repo runbooks
+   - SentinelOps analyze/investigate/workflow routes when available
+
+Do not claim features are ready if `sentinelops doctor` says otherwise.
+"""
+
+
+def _claude_skill_pull_models() -> str:
+    return """---
+name: sentinelops-pull-models
+description: Pull the configured Ollama models required by SentinelOps for the current repository.
+disable-model-invocation: true
+allowed-tools: Bash
+---
+
+# SentinelOps Pull Models
+
+1. Run `sentinelops paths` if workspace context is unclear.
+2. Run `sentinelops pull-models`.
+3. Re-run `sentinelops doctor`.
+4. Summarize what was pulled and whether analyze, investigate, and retrieval are now ready.
+"""
+
+
+def _claude_subagent(*, workspace_name: str) -> str:
+    return f"""---
+name: sentinelops-ops-copilot
+description: Use proactively for incident triage, log inspection, runbook lookup, readiness checks, deployment diagnosis, and remediation guidance in `{workspace_name}` when SentinelOps is attached.
+---
+
+You are the SentinelOps operations specialist for this repository.
+
+Always start with the repo-local SentinelOps contract:
+
+1. Read `.sentinelops/agent-context.md`.
+2. Use `sentinelops paths` to confirm workspace details.
+3. Use `sentinelops doctor` before depending on model-backed analysis.
+4. Prefer `.sentinelops/project.toml`, repo logs, repo runbooks, deploy files, and workflow artifacts over generic advice.
+
+If readiness is degraded, report that clearly instead of pretending everything is healthy.
+"""
+
+
 def _cursor_rule() -> str:
     return """---
 description: Use SentinelOps as the repo-local incident and operations copilot
@@ -383,6 +566,7 @@ When the task involves incidents, logs, runbooks, readiness, remediation, deploy
 - read `.sentinelops/agent-context.md`
 - run `sentinelops paths`
 - run `sentinelops doctor` when readiness matters
+- run `sentinelops pull-models` when Ollama is reachable but configured models are missing
 - use `sentinelops start --no-browser` if live API access is helpful
 
 Keep operational guidance grounded in `.sentinelops/project.toml`, repo docs, runbooks, deployment files, and repo log roots.
@@ -397,6 +581,7 @@ This repository has SentinelOps attached as a repo-local operations copilot.
 - Read `.sentinelops/agent-context.md` for workspace context.
 - Use `sentinelops paths` before assuming runtime paths.
 - Use `sentinelops doctor` before relying on model-backed incident analysis.
+- Use `sentinelops pull-models` when the configured Ollama models are missing.
 - Prefer repository docs, runbooks, deploy workflows, and repo log roots over generic advice when the task is operational.
 """
 
@@ -411,7 +596,8 @@ Default flow:
 1. Read `.sentinelops/agent-context.md`
 2. Run `sentinelops paths`
 3. Run `sentinelops doctor` when readiness matters
-4. Start SentinelOps with `sentinelops start --no-browser` if live API access helps
+4. Run `sentinelops pull-models` if the configured Ollama models are missing
+5. Start SentinelOps with `sentinelops start --no-browser` if live API access helps
 """
 
 
@@ -426,6 +612,7 @@ When tasks touch logs, incidents, deploy failures, runbooks, readiness, or remed
 - read `.sentinelops/agent-context.md`
 - use `sentinelops paths` to confirm workspace details
 - use `sentinelops doctor` to verify readiness
+- use `sentinelops pull-models` when Ollama is reachable but configured models are missing
 - prefer repository-specific operational evidence over generic advice
 
 If model-backed investigation is unavailable, explain that SentinelOps needs a reachable model host such as `ollama serve`.
@@ -444,6 +631,7 @@ SentinelOps is attached to this repository as a repo-local operations copilot fo
 - Read `.sentinelops/agent-context.md` when tasks involve incidents, logs, runbooks, deploy health, readiness, or remediation.
 - Start with `sentinelops paths`.
 - Run `sentinelops doctor` before assuming model-backed investigation is ready.
+- Run `sentinelops pull-models` when configured Ollama models are missing.
 - Treat `.sentinelops/project.toml` as the repo-local source of truth for workspace resources and runtime defaults.
 - Prefer repository operational evidence and these log roots before giving generic advice:
 {log_lines}

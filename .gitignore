@@ -7,3 +7,4 @@ data/chroma/
 data/knowledge_index.json
 data/runtime/
 data/workflow/
+.sentinelops/

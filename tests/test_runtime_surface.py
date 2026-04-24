@@ -455,7 +455,7 @@ def test_effective_workflow_checkpoint_database_url_prefers_metadata_database_ur
 def test_validate_settings_rejects_non_reviewed_models_under_default_license_policy() -> None:
     settings = Settings(
         analyze_model="llama3.2",
-        investigate_model="mistral:7b-instruct",
+        investigate_model="mistral",
         embedding_model="nomic-embed-text",
         model_license_policy="permissive_only",
     )

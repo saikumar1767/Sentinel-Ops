@@ -10,8 +10,8 @@ telemetry_service_name = "sentinelops-api"
 telemetry_exporter = "otlp"
 telemetry_otlp_endpoint = "https://otel.example.internal/v1/traces"
 
-analyze_model = "mistral:7b-instruct"
-investigate_model = "mistral:7b-instruct"
+analyze_model = "mistral"
+investigate_model = "mistral"
 embedding_model = "nomic-embed-text"
 model_license_policy = "permissive_only"
 commercially_reviewed_model_prefixes = ["mistral", "ministral", "nomic-embed-text"]

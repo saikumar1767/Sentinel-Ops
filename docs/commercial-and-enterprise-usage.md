@@ -10,7 +10,10 @@ The repository now includes:
 - production startup validation that rejects unsafe production profiles
 - repo-local copilot installation and generated agent/editor integrations
 - a single repo-local project config in `.sentinelops/project.toml`
+- Claude Code skills and project memory generation for attached repos
+- one-command local model bootstrap via `sentinelops pull-models`
 - shared Postgres-capable metadata persistence and Postgres-backed workflow checkpoint support
+- deterministic local retrieval pins for Chroma `0.4.24`, NumPy `<2`, ONNX Runtime `<1.20`, and PostHog `<3` after live Windows validation exposed native crashes in newer transitive versions
 
 ## Personal Mode Versus Shared Mode
 

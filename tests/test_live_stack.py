@@ -38,8 +38,8 @@ def test_live_ollama_and_chroma_roundtrip() -> None:
         chroma_ssl=os.getenv("SENTINELOPS_LIVE_CHROMA_SSL", "false").lower() == "true",
         knowledge_collection_name=collection_name,
         knowledge_auto_ingest=False,
-        analyze_model=os.getenv("SENTINELOPS_LIVE_CHAT_MODEL", "mistral:7b-instruct"),
-        investigate_model=os.getenv("SENTINELOPS_LIVE_CHAT_MODEL", "mistral:7b-instruct"),
+        analyze_model=os.getenv("SENTINELOPS_LIVE_CHAT_MODEL", "mistral"),
+        investigate_model=os.getenv("SENTINELOPS_LIVE_CHAT_MODEL", "mistral"),
         embedding_model=os.getenv("SENTINELOPS_LIVE_EMBED_MODEL", "nomic-embed-text"),
     )
 

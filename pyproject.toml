@@ -9,16 +9,19 @@ requires-python = ">=3.11"
 description = "Plug-and-play incident copilot with local and enterprise deployment profiles."
 readme = "README.md"
 dependencies = [
-    "chromadb>=1.5.5",
+    "chromadb==0.4.24",
     "fastapi>=0.135.2",
     "langgraph>=1.1.6",
     "langgraph-checkpoint-postgres>=3.0.1",
     "langgraph-checkpoint-sqlite>=3.0.3",
+    "numpy<2",
     "ollama>=0.6.1",
+    "onnxruntime>=1.17,<1.20",
     "opentelemetry-exporter-otlp-proto-http>=1.38.0",
     "opentelemetry-instrumentation-fastapi>=0.59b0",
     "opentelemetry-sdk>=1.38.0",
     "pg8000>=1.31.5",
+    "posthog>=2.4,<3",
     "pydantic-settings>=2.13.1",
     "psycopg[binary,pool]>=3.2.9",
     "PyJWT[crypto]>=2.10.1",
@@ -58,6 +61,7 @@ packages = ["app"]
 
 [tool.hatch.build.targets.sdist]
 include = [
+    "/.claude",
     "/.clinerules",
     "/.cursor",
     "/.github/copilot-instructions.md",
