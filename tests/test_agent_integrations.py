@@ -83,7 +83,9 @@ def test_install_agent_integrations_merges_shared_repo_files(tmp_path, monkeypat
         agent="all",
     )
 
-    assert result.installed_agents == ("codex", "cursor", "windsurf", "cline", "copilot")
+    assert result.installed_agents == ("claude", "codex", "cursor", "windsurf", "cline", "copilot")
+    assert (project_root / ".claude" / "skills" / "sentinelops-check" / "SKILL.md").exists()
+    assert (project_root / ".claude" / "agents" / "sentinelops-ops-copilot.md").exists()
     assert (project_root / ".cursor" / "rules" / "sentinelops.mdc").exists()
     assert (project_root / ".windsurf" / "rules" / "sentinelops.md").exists()
     assert (project_root / ".clinerules" / "sentinelops.md").exists()
@@ -91,6 +93,10 @@ def test_install_agent_integrations_merges_shared_repo_files(tmp_path, monkeypat
     agents_text = (project_root / "AGENTS.md").read_text(encoding="utf-8")
     assert "# Team Rules" in agents_text
     assert "<!-- sentinelops:start -->" in agents_text
+
+    claude_text = (project_root / "CLAUDE.md").read_text(encoding="utf-8")
+    assert "<!-- sentinelops:claude:start -->" in claude_text
+    assert "/sentinelops-check" in claude_text
 
     copilot_text = (project_root / ".github" / "copilot-instructions.md").read_text(encoding="utf-8")
     assert "# Existing Copilot Rules" in copilot_text

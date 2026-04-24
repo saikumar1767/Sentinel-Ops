@@ -1098,8 +1098,8 @@ class ReadinessResponse(BaseModel):
                         "detail": "Ollama is reachable but some configured models are missing: embedding_model=nomic-embed-text.",
                         "metadata": {
                             "endpoint": "http://localhost:11434/api/tags",
-                            "analyze_model": "mistral:7b-instruct",
-                            "investigate_model": "mistral:7b-instruct",
+                            "analyze_model": "mistral",
+                            "investigate_model": "mistral",
                             "embedding_model": "nomic-embed-text",
                         },
                     },
@@ -1230,7 +1230,7 @@ class MetricsResponse(BaseModel):
                 "model_usage": [
                     {
                         "operation": "chat",
-                        "model": "mistral:7b-instruct",
+                        "model": "mistral",
                         "call_count": 6,
                         "cache_hit_count": 2,
                         "retry_count": 1,

@@ -30,8 +30,10 @@ Narration:
 
 Screen:
 
-- `sentinelops attach --agent all`
+- `sentinelops attach --agent all --knowledge-backend chroma`
+- `sentinelops pull-models`
 - `.sentinelops/agent-context.md`
+- `.claude/skills/`
 - generated `AGENTS.md`
 
 Narration:

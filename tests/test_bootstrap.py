@@ -56,6 +56,12 @@ def test_apply_runtime_environment_sets_expected_paths(tmp_path, monkeypatch) ->
         "SENTINELOPS_INVESTIGATE_MODEL",
         "SENTINELOPS_EMBEDDING_MODEL",
         "SENTINELOPS_OLLAMA_HOST",
+        "SENTINELOPS_KNOWLEDGE_STORE_BACKEND",
+        "SENTINELOPS_CHROMA_CLIENT_MODE",
+        "SENTINELOPS_CHROMA_HOST",
+        "SENTINELOPS_CHROMA_PORT",
+        "SENTINELOPS_CHROMA_SSL",
+        "SENTINELOPS_CHROMA_AUTO_START",
         "SENTINELOPS_INCIDENT_TEMPLATES_DIR",
         "SENTINELOPS_INCIDENT_HISTORY_DIR",
         "SENTINELOPS_WORKFLOW_CHECKPOINT_PATH",
@@ -105,6 +111,12 @@ def test_attach_project_creates_repo_local_manifest_and_gitignore(tmp_path, monk
         project_root=project_root,
         workspace_name="Checkout Service",
         log_roots=["logs", "services/api/logs"],
+        ollama_host="http://host.docker.internal:11434",
+        knowledge_backend="chroma",
+        chroma_client_mode="persistent",
+        chroma_host="127.0.0.1",
+        chroma_port=8012,
+        chroma_auto_start=True,
     )
 
     manifest_path = project_root / ".sentinelops" / "project.toml"
@@ -122,6 +134,11 @@ def test_attach_project_creates_repo_local_manifest_and_gitignore(tmp_path, monk
     assert '"services/api/logs"' in manifest_text
     assert '[models]' in manifest_text
     assert '[runtime]' in manifest_text
+    assert 'ollama_host = "http://host.docker.internal:11434"' in manifest_text
+    assert '[knowledge]' in manifest_text
+    assert 'backend = "chroma"' in manifest_text
+    assert 'chroma_client_mode = "persistent"' in manifest_text
+    assert "chroma_auto_start = true" in manifest_text
     assert '[storage]' in manifest_text
     repo_gitignore = (project_root / ".gitignore").read_text(encoding="utf-8")
     assert "node_modules/" in repo_gitignore
@@ -162,6 +179,12 @@ def test_apply_runtime_environment_uses_attached_project_when_manifest_exists(tm
         "SENTINELOPS_INVESTIGATE_MODEL",
         "SENTINELOPS_EMBEDDING_MODEL",
         "SENTINELOPS_OLLAMA_HOST",
+        "SENTINELOPS_KNOWLEDGE_STORE_BACKEND",
+        "SENTINELOPS_CHROMA_CLIENT_MODE",
+        "SENTINELOPS_CHROMA_HOST",
+        "SENTINELOPS_CHROMA_PORT",
+        "SENTINELOPS_CHROMA_SSL",
+        "SENTINELOPS_CHROMA_AUTO_START",
         "SENTINELOPS_INCIDENT_TEMPLATES_DIR",
         "SENTINELOPS_INCIDENT_HISTORY_DIR",
         "SENTINELOPS_WORKFLOW_CHECKPOINT_PATH",
@@ -184,15 +207,21 @@ def test_apply_runtime_environment_uses_attached_project_when_manifest_exists(tm
         assert str((project_root / "logs").resolve()) in allowed_roots
         doc_roots = json.loads(os.environ["SENTINELOPS_WORKSPACE_DOC_ROOTS"])
         assert "README.md" in doc_roots
-        assert os.environ["SENTINELOPS_ANALYZE_MODEL"] == "mistral:7b-instruct"
-        assert os.environ["SENTINELOPS_INVESTIGATE_MODEL"] == "mistral:7b-instruct"
+        assert os.environ["SENTINELOPS_ANALYZE_MODEL"] == "mistral"
+        assert os.environ["SENTINELOPS_INVESTIGATE_MODEL"] == "mistral"
         assert os.environ["SENTINELOPS_EMBEDDING_MODEL"] == "nomic-embed-text"
         assert os.environ["SENTINELOPS_OLLAMA_HOST"] == "http://localhost:11434"
+        assert os.environ["SENTINELOPS_KNOWLEDGE_STORE_BACKEND"] == "simple"
+        assert os.environ["SENTINELOPS_CHROMA_CLIENT_MODE"] == "persistent"
+        assert os.environ["SENTINELOPS_CHROMA_HOST"] == "127.0.0.1"
+        assert os.environ["SENTINELOPS_CHROMA_PORT"] == "8012"
+        assert os.environ["SENTINELOPS_CHROMA_AUTO_START"] == "false"
 
         summary = bootstrap.runtime_summary()
         assert summary["workspace_root"] == str(project_root.resolve())
         assert summary["workspace_name"] == "Payments Service"
         assert summary["project_mode"] == "personal"
+        assert summary["project_knowledge_backend"] == "simple"
     finally:
         for key, value in previous.items():
             if value is None:
@@ -230,6 +259,12 @@ def test_apply_runtime_environment_honors_manifest_overrides(tmp_path, monkeypat
         "SENTINELOPS_INVESTIGATE_MODEL",
         "SENTINELOPS_EMBEDDING_MODEL",
         "SENTINELOPS_OLLAMA_HOST",
+        "SENTINELOPS_KNOWLEDGE_STORE_BACKEND",
+        "SENTINELOPS_CHROMA_CLIENT_MODE",
+        "SENTINELOPS_CHROMA_HOST",
+        "SENTINELOPS_CHROMA_PORT",
+        "SENTINELOPS_CHROMA_SSL",
+        "SENTINELOPS_CHROMA_AUTO_START",
         "SENTINELOPS_INCIDENT_HISTORY_DIR",
         "SENTINELOPS_WORKFLOW_CHECKPOINT_PATH",
         "SENTINELOPS_AUDIT_DB_PATH",
@@ -250,11 +285,18 @@ def test_apply_runtime_environment_honors_manifest_overrides(tmp_path, monkeypat
         "[logs]\n"
         'roots = ["custom-logs"]\n\n'
         "[models]\n"
-        'analyze = "mistral:7b-instruct"\n'
+        'analyze = "mistral"\n'
         'investigate = "ministral:8b-instruct"\n'
         'embedding = "nomic-embed-text"\n\n'
         "[runtime]\n"
         'ollama_host = "http://127.0.0.1:22434"\n\n'
+        "[knowledge]\n"
+        'backend = "chroma"\n'
+        'chroma_client_mode = "persistent"\n'
+        'chroma_host = "127.0.0.1"\n'
+        "chroma_port = 8013\n"
+        "chroma_ssl = false\n"
+        "chroma_auto_start = true\n\n"
         "[storage]\n"
         'incident_history_dir = "runtime/incidents"\n'
         'workflow_checkpoint_path = "runtime/workflow.sqlite"\n'
@@ -268,9 +310,12 @@ def test_apply_runtime_environment_honors_manifest_overrides(tmp_path, monkeypat
         bootstrap.apply_runtime_environment(project_root=project_root)
 
         assert json.loads(os.environ["SENTINELOPS_WORKSPACE_DOC_ROOTS"]) == ["docs", "ops"]
-        assert os.environ["SENTINELOPS_ANALYZE_MODEL"] == "mistral:7b-instruct"
+        assert os.environ["SENTINELOPS_ANALYZE_MODEL"] == "mistral"
         assert os.environ["SENTINELOPS_INVESTIGATE_MODEL"] == "ministral:8b-instruct"
         assert os.environ["SENTINELOPS_OLLAMA_HOST"] == "http://127.0.0.1:22434"
+        assert os.environ["SENTINELOPS_KNOWLEDGE_STORE_BACKEND"] == "chroma"
+        assert os.environ["SENTINELOPS_CHROMA_PORT"] == "8013"
+        assert os.environ["SENTINELOPS_CHROMA_AUTO_START"] == "true"
         assert Path(os.environ["SENTINELOPS_INCIDENT_HISTORY_DIR"]).name == "incidents"
         assert Path(os.environ["SENTINELOPS_WORKFLOW_CHECKPOINT_PATH"]).name == "workflow.sqlite"
         assert Path(os.environ["SENTINELOPS_CHROMA_PATH"]).name == "chroma-db"

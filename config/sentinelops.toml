@@ -8,8 +8,8 @@ telemetry_enabled = false
 telemetry_service_name = "sentinelops-api"
 telemetry_exporter = "none"
 
-analyze_model = "mistral:7b-instruct"
-investigate_model = "mistral:7b-instruct"
+analyze_model = "mistral"
+investigate_model = "mistral"
 embedding_model = "nomic-embed-text"
 model_license_policy = "permissive_only"
 ollama_host = "http://localhost:11434"

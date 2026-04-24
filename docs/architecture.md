@@ -2,7 +2,7 @@
 
 ## Design Goal
 
-SentinelOps is designed to feel simple on an individual engineer's machine and still preserve a clean path to a stricter shared deployment later.
+SentinelOps is designed to feel simple on one engineer's machine and still preserve a clean path to a stricter shared deployment later.
 
 The primary design choice is:
 
@@ -28,7 +28,7 @@ flowchart LR
     subgraph Repo["Attached Project"]
         Manifest[".sentinelops/project.toml"]
         AgentContext[".sentinelops/agent-context.md"]
-        Rules["AGENTS.md / Copilot / Cursor / Windsurf / Codex"]
+        Rules["CLAUDE / AGENTS / Codex / Cursor / Windsurf / Copilot"]
         Docs["README / Docs / Runbooks / Workflows"]
         Logs["Configured Log Roots"]
     end
@@ -48,12 +48,13 @@ flowchart LR
     Analyze --> Ollama["Ollama"]
     Investigate --> Ollama
     Workflow --> Ollama
+    Analyze --> Retrieval["Simple Index or Chroma"]
+    Investigate --> Retrieval
+    Workflow --> Retrieval
     Workflow --> RuntimeState["Repo-local Runtime State"]
 ```
 
 ## Repository Architecture
-
-This is how the repository is laid out at a product level.
 
 ```mermaid
 flowchart TB
@@ -85,6 +86,7 @@ That file controls:
 - log roots
 - default models
 - Ollama host
+- retrieval backend and Chroma connection settings
 - repo-local storage paths
 
 ### Attach and bootstrap flow
@@ -96,7 +98,7 @@ flowchart LR
     Detect --> Manifest["Write .sentinelops/project.toml"]
     Detect --> Context["Write .sentinelops/agent-context.md"]
     Detect --> Ignore["Update .gitignore"]
-    Detect --> AgentRules["Generate repo-local agent/editor files"]
+    Detect --> AgentRules["Generate Claude and other agent files"]
     Manifest --> Start["sentinelops"]
     Start --> Runtime["Apply runtime env from project config"]
     Runtime --> App["FastAPI app + console"]
@@ -174,6 +176,7 @@ flowchart LR
     Settings --> LogRoots["allowed_log_roots"]
     Settings --> DocRoots["workspace_doc_roots"]
     Settings --> Models["analyze / investigate / embedding models"]
+    Settings --> Backend["simple or chroma backend"]
     Settings --> Storage["storage paths"]
     DocRoots --> Loader["KnowledgeDocumentLoader"]
     LogRoots --> Tools["FileTools"]
@@ -200,6 +203,7 @@ Generated integrations are product surfaces, not side artifacts.
 ```mermaid
 flowchart LR
     Manifest[".sentinelops/project.toml"] --> AgentContext[".sentinelops/agent-context.md"]
+    Manifest --> Claude[".claude/skills + .claude/agents + CLAUDE.md"]
     Manifest --> AGENTS["AGENTS.md block"]
     Manifest --> Codex["Codex plugin bundle"]
     Manifest --> Cursor["Cursor rule"]
@@ -239,11 +243,11 @@ Use shared mode only when you need:
 
 ### 1. Local-first is the default product, not the demo mode
 
-The easiest real use case is one engineer attaching SentinelOps to one repo on one PC. The architecture now treats that as the main product path.
+The easiest real use case is one engineer attaching SentinelOps to one repo on one PC. The architecture treats that as the main product path.
 
 ### 2. One repo config beats scattered hidden behavior
 
-`.sentinelops/project.toml` is the local control plane so engineers can see and edit what SentinelOps reads and stores.
+`.sentinelops/project.toml` is the local control plane so engineers can see and edit what SentinelOps reads, where it stores state, and which local services it expects.
 
 ### 3. Retrieval is explicit and bounded
 

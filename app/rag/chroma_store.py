@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import shutil
 from collections import Counter
+from pathlib import Path
+from types import ModuleType
 from typing import Any
-
-import chromadb
 
 from app.rag.chroma_runtime import ChromaRuntimeManager
 from app.rag.models import KnowledgeChunk
 from app.schemas import DocumentType, IncidentType, KnowledgeIngestResponse, RetrievalHit
 from app.settings import Settings
+
+chromadb: ModuleType | None = None
+ChromaClientSettings: type | None = None
 
 
 class ChromaKnowledgeStore:
@@ -22,14 +26,21 @@ class ChromaKnowledgeStore:
         return self.settings.knowledge_collection_name
 
     def _build_client(self):
+        chroma_module, chroma_settings_class = _load_chromadb()
+        client_settings = chroma_settings_class(anonymized_telemetry=False)
         if self.settings.chroma_client_mode == "persistent":
-            return chromadb.PersistentClient(path=self.settings.chroma_path)
+            self.settings.chroma_path.mkdir(parents=True, exist_ok=True)
+            return chroma_module.PersistentClient(
+                path=str(self.settings.chroma_path),
+                settings=client_settings,
+            )
 
         self.runtime.ensure_ready()
-        return chromadb.HttpClient(
+        return chroma_module.HttpClient(
             host=self.settings.chroma_host,
             port=self.settings.chroma_port,
             ssl=self.settings.chroma_ssl,
+            settings=client_settings,
         )
 
     def _get_client(self):
@@ -45,21 +56,21 @@ class ChromaKnowledgeStore:
         reset: bool,
     ) -> KnowledgeIngestResponse:
         if reset:
-            try:
-                self._get_client().delete_collection(name=self.collection_name)
-            except Exception:
-                pass
+            self._reset_collection()
 
         collection = self._get_client().get_or_create_collection(
             name=self.collection_name,
             embedding_function=None,
         )
-        if chunks:
+        batch_size = max(1, min(self.settings.embedding_batch_size, 32))
+        for start in range(0, len(chunks), batch_size):
+            batch_chunks = chunks[start : start + batch_size]
+            batch_embeddings = embeddings[start : start + batch_size]
             collection.upsert(
-                ids=[chunk.chunk_id for chunk in chunks],
-                documents=[chunk.content for chunk in chunks],
-                metadatas=[chunk.to_metadata() for chunk in chunks],
-                embeddings=embeddings,
+                ids=[chunk.chunk_id for chunk in batch_chunks],
+                documents=[chunk.content for chunk in batch_chunks],
+                metadatas=[chunk.to_metadata() for chunk in batch_chunks],
+                embeddings=batch_embeddings,
             )
 
         source_counts = Counter()
@@ -138,6 +149,18 @@ class ChromaKnowledgeStore:
 
         return hits
 
+    def _reset_collection(self) -> None:
+        if self.settings.chroma_client_mode == "persistent" and self._client is None:
+            self._reset_persistent_path(self.settings.chroma_path)
+            return
+        try:
+            self._get_client().delete_collection(name=self.collection_name)
+        except Exception:
+            if self.settings.chroma_client_mode == "persistent":
+                self._client = None
+                self._reset_persistent_path(self.settings.chroma_path)
+                return
+
     @staticmethod
     def _build_where(
         *,
@@ -158,3 +181,23 @@ class ChromaKnowledgeStore:
         if len(clauses) == 1:
             return clauses[0]
         return {"$and": clauses}
+
+    @staticmethod
+    def _reset_persistent_path(path: Path) -> None:
+        resolved = path.resolve()
+        if resolved == resolved.parent:
+            raise RuntimeError(f"Refusing to reset unsafe Chroma path: {resolved}")
+        if resolved.exists():
+            shutil.rmtree(resolved)
+        resolved.mkdir(parents=True, exist_ok=True)
+
+
+def _load_chromadb() -> tuple[ModuleType, type]:
+    global chromadb, ChromaClientSettings
+    if chromadb is None or ChromaClientSettings is None:
+        import chromadb as chromadb_module
+        from chromadb.config import Settings as chroma_settings_class
+
+        chromadb = chromadb_module
+        ChromaClientSettings = chroma_settings_class
+    return chromadb, ChromaClientSettings

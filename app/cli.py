@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import threading
@@ -45,6 +46,13 @@ def build_parser() -> argparse.ArgumentParser:
     attach_parser.add_argument("--name", default=None)
     attach_parser.add_argument("--log-root", action="append", default=[])
     attach_parser.add_argument("--doc-root", action="append", default=[])
+    attach_parser.add_argument("--ollama-host", default=None)
+    attach_parser.add_argument("--knowledge-backend", choices=("simple", "chroma"), default=None)
+    attach_parser.add_argument("--chroma-client-mode", choices=("http", "persistent"), default=None)
+    attach_parser.add_argument("--chroma-host", default=None)
+    attach_parser.add_argument("--chroma-port", type=int, default=None)
+    attach_parser.add_argument("--chroma-ssl", action="store_true")
+    attach_parser.add_argument("--chroma-auto-start", action="store_true")
     attach_parser.add_argument("--agent", choices=agent_choices, default=None)
     attach_parser.add_argument("--overwrite", action="store_true")
 
@@ -60,6 +68,16 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_parser.add_argument("--profile", choices=("local", "production"), default="local")
     doctor_parser.add_argument("--home", type=Path, default=None)
     doctor_parser.add_argument("--project-root", type=Path, default=None)
+
+    pull_models_parser = subparsers.add_parser(
+        "pull-models",
+        help="Pull the Ollama models required by the active SentinelOps workspace.",
+    )
+    pull_models_parser.add_argument("--profile", choices=("local", "production"), default="local")
+    pull_models_parser.add_argument("--home", type=Path, default=None)
+    pull_models_parser.add_argument("--project-root", type=Path, default=None)
+    pull_models_parser.add_argument("--model", action="append", default=[])
+    pull_models_parser.add_argument("--timeout", type=int, default=1800)
 
     paths_parser = subparsers.add_parser("paths", help="Print important SentinelOps paths.")
     paths_parser.add_argument("--profile", choices=("local", "production"), default="local")
@@ -96,6 +114,13 @@ def main(argv: list[str] | None = None) -> int:
                 workspace_name=args.name,
                 log_roots=args.log_root,
                 doc_roots=args.doc_root,
+                ollama_host=args.ollama_host,
+                knowledge_backend=args.knowledge_backend,
+                chroma_client_mode=args.chroma_client_mode,
+                chroma_host=args.chroma_host,
+                chroma_port=args.chroma_port,
+                chroma_ssl=args.chroma_ssl if args.chroma_ssl else None,
+                chroma_auto_start=args.chroma_auto_start if args.chroma_auto_start else None,
                 overwrite=args.overwrite,
             )
             print(f"SentinelOps attached to {project_root}")
@@ -120,6 +145,14 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if command == "doctor":
             return _doctor_command(profile=args.profile, app_home=args.home, project_root=args.project_root)
+        if command == "pull-models":
+            return _pull_models_command(
+                profile=args.profile,
+                app_home=args.home,
+                project_root=args.project_root,
+                models=args.model,
+                timeout_seconds=args.timeout,
+            )
         if command == "paths":
             for key, value in runtime_summary(
                 app_home=args.home,
@@ -225,6 +258,27 @@ def _doctor_command(*, profile: str, app_home: Path | None, project_root: Path |
     return 0
 
 
+def _pull_models_command(
+    *,
+    profile: str,
+    app_home: Path | None,
+    project_root: Path | None,
+    models: list[str],
+    timeout_seconds: int,
+) -> int:
+    apply_runtime_environment(app_home=app_home, profile=profile, project_root=project_root)
+    requested_models = _requested_models(models)
+    ollama_host = os.environ.get("SENTINELOPS_OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
+
+    for model in requested_models:
+        print(f"Pulling {model} from {ollama_host} ...")
+        _pull_single_model(ollama_host=ollama_host, model=model, timeout_seconds=timeout_seconds)
+        print(f"Pulled {model}")
+
+    print("Re-run `sentinelops doctor` to confirm readiness.")
+    return 0
+
+
 def _print_ollama_hint() -> None:
     ollama_host = os.environ.get("SENTINELOPS_OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
     try:
@@ -232,6 +286,57 @@ def _print_ollama_hint() -> None:
         print(f"Ollama reachable at {ollama_host}")
     except Exception:
         print(f"Ollama not reachable at {ollama_host}. Start `ollama serve` if model requests fail.")
+
+
+def _requested_models(explicit_models: list[str]) -> list[str]:
+    if explicit_models:
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for model in explicit_models:
+            cleaned = model.strip()
+            if not cleaned or cleaned in seen:
+                continue
+            seen.add(cleaned)
+            deduped.append(cleaned)
+        return deduped
+
+    inferred = [
+        os.environ.get("SENTINELOPS_ANALYZE_MODEL", "").strip(),
+        os.environ.get("SENTINELOPS_INVESTIGATE_MODEL", "").strip(),
+        os.environ.get("SENTINELOPS_EMBEDDING_MODEL", "").strip(),
+    ]
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for model in inferred:
+        if not model or model in seen:
+            continue
+        seen.add(model)
+        deduped.append(model)
+    return deduped
+
+
+def _pull_single_model(*, ollama_host: str, model: str, timeout_seconds: int) -> None:
+    payload = json.dumps({"model": model, "stream": False}).encode("utf-8")
+    req = urllib.request.Request(
+        f"{ollama_host}/api/pull",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_seconds) as response:
+            raw = response.read().decode("utf-8")
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Failed to pull Ollama model '{model}' from {ollama_host}: {exc}") from exc
+
+    if not raw.strip():
+        return
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return
+    if isinstance(parsed, dict) and parsed.get("status") not in {None, "success"}:
+        raise RuntimeError(f"Ollama pull for '{model}' did not report success: {parsed}")
 
 
 def _print_agent_install_result(result: AgentInstallResult) -> None:

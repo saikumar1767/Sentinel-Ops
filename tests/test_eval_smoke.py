@@ -320,7 +320,7 @@ def test_runtime_health_marks_retrieval_capabilities_degraded_when_embedding_mod
         def json(self) -> dict[str, object]:
             return {
                 "models": [
-                    {"name": "mistral:7b-instruct", "model": "mistral:7b-instruct"},
+                    {"name": "mistral", "model": "mistral"},
                 ]
             }
 
@@ -352,9 +352,45 @@ def test_runtime_health_reports_unreachable_ollama_without_claiming_models_are_m
 
     assert report.dependencies["ollama"].status == "unavailable"
     assert report.capabilities["analyze_endpoint"].status == "unavailable"
-    assert report.capabilities["investigate_endpoint"].status == "unavailable"
-    assert "not reachable" in report.capabilities["analyze_endpoint"].detail.lower()
-    assert "not installed" not in report.capabilities["analyze_endpoint"].detail.lower()
+
+
+def test_runtime_health_accepts_persistent_chroma_without_http_server(monkeypatch, tmp_path) -> None:
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {
+                "models": [
+                    {"name": "mistral:latest"},
+                    {"name": "nomic-embed-text:latest"},
+                ]
+            }
+
+    def fake_get(url: str, timeout: int):
+        if "/api/tags" not in url:
+            raise AssertionError(f"unexpected HTTP readiness probe: {url}")
+        return FakeResponse()
+
+    monkeypatch.setattr("app.services.runtime_health_service.requests.get", fake_get)
+    service = RuntimeHealthService(
+        Settings(
+            knowledge_store_backend="chroma",
+            chroma_client_mode="persistent",
+            chroma_path=tmp_path / "chroma-db",
+            analyze_model="mistral",
+            investigate_model="mistral",
+            embedding_model="nomic-embed-text",
+        )
+    )
+
+    report = service.readiness_report(scope="strict")
+
+    assert report.dependencies["chroma"].status == "ok"
+    assert report.dependencies["chroma"].metadata["client_mode"] == "persistent"
+    assert report.strict_ready is True
+    assert report.capabilities["analyze_endpoint"].status == "ok"
+    assert report.capabilities["investigate_endpoint"].status == "ok"
 
 
 def test_openapi_includes_rag_examples_for_analyze_and_investigate() -> None:

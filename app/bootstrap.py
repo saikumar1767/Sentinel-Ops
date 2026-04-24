@@ -55,8 +55,8 @@ _DEFAULT_PROJECT_DOC_ROOTS = (
     Path(".github") / "workflows",
 )
 _DEFAULT_PROJECT_MODELS = {
-    "analyze": "mistral:7b-instruct",
-    "investigate": "mistral:7b-instruct",
+    "analyze": "mistral",
+    "investigate": "mistral",
     "embedding": "nomic-embed-text",
 }
 _DEFAULT_PROJECT_STORAGE = {
@@ -65,6 +65,14 @@ _DEFAULT_PROJECT_STORAGE = {
     "audit_db_path": "data/runtime/audit/audit.sqlite",
     "knowledge_index_path": "data/runtime/knowledge/knowledge_index.json",
     "chroma_path": "data/runtime/chroma",
+}
+_DEFAULT_PROJECT_KNOWLEDGE = {
+    "backend": "simple",
+    "chroma_client_mode": "persistent",
+    "chroma_host": "127.0.0.1",
+    "chroma_port": 8012,
+    "chroma_ssl": False,
+    "chroma_auto_start": False,
 }
 _PROJECT_GITIGNORE = """data/runtime/
 data/chroma/
@@ -139,6 +147,13 @@ def attach_project(
     workspace_name: str | None = None,
     log_roots: list[str] | None = None,
     doc_roots: list[str] | None = None,
+    ollama_host: str | None = None,
+    knowledge_backend: str | None = None,
+    chroma_client_mode: str | None = None,
+    chroma_host: str | None = None,
+    chroma_port: int | None = None,
+    chroma_ssl: bool | None = None,
+    chroma_auto_start: bool | None = None,
     overwrite: bool = False,
 ) -> tuple[Path, Path]:
     resolved_project_root = (project_root or detect_repository_root()).expanduser().resolve()
@@ -148,6 +163,13 @@ def attach_project(
         workspace_name=workspace_name,
         log_roots=log_roots,
         doc_roots=doc_roots,
+        ollama_host=ollama_host,
+        knowledge_backend=knowledge_backend,
+        chroma_client_mode=chroma_client_mode,
+        chroma_host=chroma_host,
+        chroma_port=chroma_port,
+        chroma_ssl=chroma_ssl,
+        chroma_auto_start=chroma_auto_start,
         overwrite=overwrite,
     )
     _write_project_gitignore(home)
@@ -175,6 +197,12 @@ def apply_runtime_environment(
         doc_roots = project_manifest_doc_roots(manifest)
         model_names = project_manifest_models(manifest)
         ollama_host = project_manifest_ollama_host(manifest)
+        knowledge_backend = project_manifest_knowledge_backend(manifest)
+        chroma_client_mode = project_manifest_chroma_client_mode(manifest)
+        chroma_host = project_manifest_chroma_host(manifest)
+        chroma_port = project_manifest_chroma_port(manifest)
+        chroma_ssl = project_manifest_chroma_ssl(manifest)
+        chroma_auto_start = project_manifest_chroma_auto_start(manifest)
         allowed_log_roots = _resolve_project_log_roots(resolved_project_root, home, manifest)
         os.environ[SENTINELOPS_WORKSPACE_ROOT_ENV] = str(resolved_project_root)
         os.environ[SENTINELOPS_WORKSPACE_NAME_ENV] = workspace_name
@@ -184,12 +212,28 @@ def apply_runtime_environment(
         os.environ["SENTINELOPS_EMBEDDING_MODEL"] = model_names["embedding"]
         if ollama_host:
             os.environ["SENTINELOPS_OLLAMA_HOST"] = ollama_host
+        os.environ["SENTINELOPS_KNOWLEDGE_STORE_BACKEND"] = knowledge_backend
+        os.environ["SENTINELOPS_CHROMA_CLIENT_MODE"] = chroma_client_mode
+        os.environ["SENTINELOPS_CHROMA_HOST"] = chroma_host
+        os.environ["SENTINELOPS_CHROMA_PORT"] = str(chroma_port)
+        os.environ["SENTINELOPS_CHROMA_SSL"] = "true" if chroma_ssl else "false"
+        os.environ["SENTINELOPS_CHROMA_AUTO_START"] = "true" if chroma_auto_start else "false"
     else:
         home = ensure_app_home(app_home=app_home)
         allowed_log_roots = [home / "samples", home / "data" / "logs"]
         os.environ.pop(SENTINELOPS_WORKSPACE_ROOT_ENV, None)
         os.environ.pop(SENTINELOPS_WORKSPACE_NAME_ENV, None)
         os.environ.pop("SENTINELOPS_WORKSPACE_DOC_ROOTS", None)
+        os.environ.pop("SENTINELOPS_ANALYZE_MODEL", None)
+        os.environ.pop("SENTINELOPS_INVESTIGATE_MODEL", None)
+        os.environ.pop("SENTINELOPS_EMBEDDING_MODEL", None)
+        os.environ.pop("SENTINELOPS_OLLAMA_HOST", None)
+        os.environ.pop("SENTINELOPS_KNOWLEDGE_STORE_BACKEND", None)
+        os.environ.pop("SENTINELOPS_CHROMA_CLIENT_MODE", None)
+        os.environ.pop("SENTINELOPS_CHROMA_HOST", None)
+        os.environ.pop("SENTINELOPS_CHROMA_PORT", None)
+        os.environ.pop("SENTINELOPS_CHROMA_SSL", None)
+        os.environ.pop("SENTINELOPS_CHROMA_AUTO_START", None)
 
     runtime = _runtime_dir(home)
     runtime.mkdir(parents=True, exist_ok=True)
@@ -253,6 +297,11 @@ def runtime_summary(
         summary["project_analyze_model"] = project_models["analyze"]
         summary["project_investigate_model"] = project_models["investigate"]
         summary["project_embedding_model"] = project_models["embedding"]
+        summary["project_knowledge_backend"] = project_manifest_knowledge_backend(manifest)
+        summary["project_chroma_client_mode"] = project_manifest_chroma_client_mode(manifest)
+        summary["project_chroma_host"] = project_manifest_chroma_host(manifest)
+        summary["project_chroma_port"] = str(project_manifest_chroma_port(manifest))
+        summary["project_chroma_auto_start"] = str(project_manifest_chroma_auto_start(manifest)).lower()
         ollama_host = project_manifest_ollama_host(manifest)
         if ollama_host:
             summary["project_ollama_host"] = ollama_host
@@ -315,6 +364,61 @@ def project_manifest_ollama_host(manifest: dict[str, object]) -> str | None:
     return _manifest_string(manifest, "runtime", "ollama_host", default=None)
 
 
+def project_manifest_knowledge_backend(manifest: dict[str, object]) -> str:
+    return _manifest_string(
+        manifest,
+        "knowledge",
+        "backend",
+        default=str(_DEFAULT_PROJECT_KNOWLEDGE["backend"]),
+    ) or str(_DEFAULT_PROJECT_KNOWLEDGE["backend"])
+
+
+def project_manifest_chroma_client_mode(manifest: dict[str, object]) -> str:
+    return _manifest_string(
+        manifest,
+        "knowledge",
+        "chroma_client_mode",
+        default=str(_DEFAULT_PROJECT_KNOWLEDGE["chroma_client_mode"]),
+    ) or str(_DEFAULT_PROJECT_KNOWLEDGE["chroma_client_mode"])
+
+
+def project_manifest_chroma_host(manifest: dict[str, object]) -> str:
+    return _manifest_string(
+        manifest,
+        "knowledge",
+        "chroma_host",
+        default=str(_DEFAULT_PROJECT_KNOWLEDGE["chroma_host"]),
+    ) or str(_DEFAULT_PROJECT_KNOWLEDGE["chroma_host"])
+
+
+def project_manifest_chroma_port(manifest: dict[str, object]) -> int:
+    value = _manifest_int(
+        manifest,
+        "knowledge",
+        "chroma_port",
+        default=int(_DEFAULT_PROJECT_KNOWLEDGE["chroma_port"]),
+    )
+    return value if value is not None else int(_DEFAULT_PROJECT_KNOWLEDGE["chroma_port"])
+
+
+def project_manifest_chroma_ssl(manifest: dict[str, object]) -> bool:
+    return _manifest_bool(
+        manifest,
+        "knowledge",
+        "chroma_ssl",
+        default=bool(_DEFAULT_PROJECT_KNOWLEDGE["chroma_ssl"]),
+    )
+
+
+def project_manifest_chroma_auto_start(manifest: dict[str, object]) -> bool:
+    return _manifest_bool(
+        manifest,
+        "knowledge",
+        "chroma_auto_start",
+        default=bool(_DEFAULT_PROJECT_KNOWLEDGE["chroma_auto_start"]),
+    )
+
+
 def _runtime_dir(home: Path) -> Path:
     return home / "data" / "runtime"
 
@@ -359,6 +463,13 @@ def _write_project_manifest(
     workspace_name: str | None,
     log_roots: list[str] | None,
     doc_roots: list[str] | None,
+    ollama_host: str | None,
+    knowledge_backend: str | None,
+    chroma_client_mode: str | None,
+    chroma_host: str | None,
+    chroma_port: int | None,
+    chroma_ssl: bool | None,
+    chroma_auto_start: bool | None,
     overwrite: bool,
 ) -> None:
     manifest_path = project_manifest_path(project_root)
@@ -369,6 +480,24 @@ def _write_project_manifest(
     manifest_workspace_name = (workspace_name or project_root.name).strip() or project_root.name
     unique_log_roots = _normalize_manifest_paths(log_roots or _detect_project_log_roots(project_root))
     unique_doc_roots = _normalize_manifest_paths(doc_roots or _detect_project_doc_roots(project_root))
+    manifest_ollama_host = (
+        ollama_host or os.getenv("SENTINELOPS_OLLAMA_HOST") or "http://localhost:11434"
+    ).strip() or "http://localhost:11434"
+    manifest_knowledge_backend = (knowledge_backend or str(_DEFAULT_PROJECT_KNOWLEDGE["backend"])).strip() or str(
+        _DEFAULT_PROJECT_KNOWLEDGE["backend"]
+    )
+    default_chroma_client_mode = "persistent" if manifest_knowledge_backend == "chroma" else str(
+        _DEFAULT_PROJECT_KNOWLEDGE["chroma_client_mode"]
+    )
+    manifest_chroma_client_mode = (chroma_client_mode or default_chroma_client_mode).strip() or default_chroma_client_mode
+    manifest_chroma_host = (chroma_host or str(_DEFAULT_PROJECT_KNOWLEDGE["chroma_host"])).strip() or str(
+        _DEFAULT_PROJECT_KNOWLEDGE["chroma_host"]
+    )
+    manifest_chroma_port = chroma_port if chroma_port is not None else int(_DEFAULT_PROJECT_KNOWLEDGE["chroma_port"])
+    manifest_chroma_ssl = chroma_ssl if chroma_ssl is not None else bool(_DEFAULT_PROJECT_KNOWLEDGE["chroma_ssl"])
+    manifest_chroma_auto_start = (
+        chroma_auto_start if chroma_auto_start is not None else bool(_DEFAULT_PROJECT_KNOWLEDGE["chroma_auto_start"])
+    )
 
     lines = [
         'schema_version = "2"',
@@ -398,7 +527,15 @@ def _write_project_manifest(
             f'embedding = "{_DEFAULT_PROJECT_MODELS["embedding"]}"',
             "",
             "[runtime]",
-            'ollama_host = "http://localhost:11434"',
+            f'ollama_host = "{_escape_toml_string(manifest_ollama_host)}"',
+            "",
+            "[knowledge]",
+            f'backend = "{_escape_toml_string(manifest_knowledge_backend)}"',
+            f'chroma_client_mode = "{_escape_toml_string(manifest_chroma_client_mode)}"',
+            f'chroma_host = "{_escape_toml_string(manifest_chroma_host)}"',
+            f"chroma_port = {manifest_chroma_port}",
+            f"chroma_ssl = {str(manifest_chroma_ssl).lower()}",
+            f"chroma_auto_start = {str(manifest_chroma_auto_start).lower()}",
             "",
             "[storage]",
             f'incident_history_dir = "{_DEFAULT_PROJECT_STORAGE["incident_history_dir"]}"',
@@ -464,6 +601,10 @@ def _render_agent_context(
 ) -> str:
     quoted_logs = "\n".join(f"- `{log_root}`" for log_root in log_roots)
     quoted_docs = "\n".join(f"- `{doc_root}`" for doc_root in doc_roots)
+    manifest = read_project_manifest(project_root)
+    models = project_manifest_models(manifest)
+    knowledge_backend = project_manifest_knowledge_backend(manifest)
+    chroma_client_mode = project_manifest_chroma_client_mode(manifest)
     return f"""# SentinelOps Agent Context
 
 SentinelOps is attached to this repository as a repo-local project copilot.
@@ -480,6 +621,7 @@ SentinelOps is attached to this repository as a repo-local project copilot.
 
 - `sentinelops`
 - `sentinelops doctor`
+- `sentinelops pull-models`
 - `sentinelops paths`
 - `sentinelops start --no-browser`
 - `ollama serve`
@@ -502,6 +644,14 @@ Use SentinelOps when the task involves:
 ## Project Document Roots
 
 {quoted_docs}
+
+## Runtime Defaults
+
+- Chat model: `{models["analyze"]}`
+- Investigation model: `{models["investigate"]}`
+- Embedding model: `{models["embedding"]}`
+- Knowledge backend: `{knowledge_backend}`
+- Chroma client mode: `{chroma_client_mode}`
 
 ## Notes For Agents
 
@@ -620,6 +770,55 @@ def _manifest_string_list(
         values = list(default or [])
 
     return _normalize_manifest_paths(values)
+
+
+def _manifest_int(
+    manifest: dict[str, object],
+    section_or_key: str,
+    key: str | None = None,
+    *,
+    default: int | None = None,
+) -> int | None:
+    if key is None:
+        candidate = manifest.get(section_or_key)
+    else:
+        candidate = _manifest_section(manifest, section_or_key).get(key)
+
+    if isinstance(candidate, bool):
+        return default
+    if isinstance(candidate, int):
+        return candidate
+    if isinstance(candidate, str):
+        cleaned = candidate.strip()
+        if cleaned:
+            try:
+                return int(cleaned)
+            except ValueError:
+                return default
+    return default
+
+
+def _manifest_bool(
+    manifest: dict[str, object],
+    section_or_key: str,
+    key: str | None = None,
+    *,
+    default: bool = False,
+) -> bool:
+    if key is None:
+        candidate = manifest.get(section_or_key)
+    else:
+        candidate = _manifest_section(manifest, section_or_key).get(key)
+
+    if isinstance(candidate, bool):
+        return candidate
+    if isinstance(candidate, str):
+        normalized = candidate.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return default
 
 
 def _escape_toml_string(value: str) -> str:

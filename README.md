@@ -29,14 +29,17 @@
 
 ---
 
-SentinelOps is a local-first incident and operations copilot that can attach directly to any engineering repository. The default product shape is simple:
+SentinelOps is a local-first incident and operations copilot that attaches directly to an engineer's repository.
+
+The intended default flow is:
 
 - install `sentinelops`
+- pull the configured local models once
 - run `sentinelops attach --agent all` in your project
 - let `.sentinelops/project.toml` become the repo-local control plane
-- start `sentinelops` and use the console, API, or generated agent integrations
+- start `sentinelops` and use the console, API, or generated Claude/Codex/editor integrations
 
-The local-first path does not require login. Shared auth, OIDC, and centralized infrastructure are optional overlays for teams that later choose a shared deployment.
+The local-first path does not require login. Shared auth, OIDC, and centralized infrastructure remain optional overlays for companies that later choose a shared deployment.
 
 ## Technologies Used
 
@@ -46,7 +49,7 @@ The local-first path does not require login. Shared auth, OIDC, and centralized 
 | Config and contracts | Pydantic, Pydantic Settings |
 | Model runtime | Ollama |
 | Workflow orchestration | LangGraph |
-| Retrieval | Chroma or simple local index |
+| Retrieval | Chroma `0.4.24` pinned for stable local persistent storage, or simple local index |
 | Persistence | SQLite by default, Postgres optional |
 | Observability | OpenTelemetry |
 | Packaging | `uv`, Hatchling |
@@ -59,7 +62,7 @@ The local-first path does not require login. Shared auth, OIDC, and centralized 
 | `personal` | Local-first repo copilot on one engineer's PC | No | Default office-PC usage across individual projects |
 | `shared` | Optional centralized rollout with shared persistence and auth | Yes | Multi-user internal deployment with governance needs |
 
-Personal mode is the primary path. Shared mode is an opt-in expansion, not the default requirement.
+Personal mode is the primary path. Shared mode is an optional second layer.
 
 ## Install
 
@@ -69,30 +72,41 @@ Personal mode is the primary path. Shared mode is an opt-in expansion, not the d
 | macOS / Linux | `curl -fsSL https://raw.githubusercontent.com/saikumar1767/Sentinel-Ops/main/scripts/install_sentinelops.sh \| bash` |
 | Direct with `uv` | `uv tool install --from https://github.com/saikumar1767/Sentinel-Ops/archive/refs/heads/main.zip sentinel-ops` |
 
-The shortest repo-local flow is:
+Recommended first-run flow inside a repo:
 
 ```bash
 cd your-project
-sentinelops attach --agent all
+sentinelops attach --agent all --knowledge-backend chroma
+sentinelops pull-models
+sentinelops doctor
 sentinelops
 ```
 
 Helpful follow-up commands:
 
 ```bash
-sentinelops doctor
 sentinelops paths
 sentinelops install-agent --agent all --overwrite
+sentinelops start --no-browser
 ```
+
+If SentinelOps runs in a container while Ollama runs on the host machine, attach with:
+
+```bash
+sentinelops attach --agent all --knowledge-backend chroma --ollama-host http://host.docker.internal:11434
+```
+
+Docker validation also requires the container to reach PyPI during image build and reach the host Ollama endpoint during live checks. If those two network paths are blocked, fix Docker Desktop networking before treating the container result as a product failure.
 
 ## Single Project Config
 
-SentinelOps now treats `.sentinelops/project.toml` as the single repo-local control file for:
+SentinelOps treats `.sentinelops/project.toml` as the single repo-local control file for:
 
 - project name and mode
 - doc roots and log roots
-- default models
+- Ollama models
 - Ollama host
+- retrieval backend and Chroma settings
 - repo-local runtime storage paths
 
 Example generated shape:
@@ -118,12 +132,20 @@ roots = [
 ]
 
 [models]
-analyze = "mistral:7b-instruct"
-investigate = "mistral:7b-instruct"
+analyze = "mistral"
+investigate = "mistral"
 embedding = "nomic-embed-text"
 
 [runtime]
 ollama_host = "http://localhost:11434"
+
+[knowledge]
+backend = "chroma"
+chroma_client_mode = "persistent"
+chroma_host = "127.0.0.1"
+chroma_port = 8012
+chroma_ssl = false
+chroma_auto_start = false
 
 [storage]
 incident_history_dir = "data/runtime/recent_incidents"
@@ -140,7 +162,8 @@ What `sentinelops attach` does:
 - writes `.sentinelops/agent-context.md`
 - adds `.sentinelops/` to the repo `.gitignore`
 - detects common docs, runbooks, deploy files, and log roots
-- optionally generates Codex, Cursor, Windsurf, Cline, and Copilot integrations
+- optionally stamps the retrieval backend and Chroma runtime choices
+- generates Claude Code, Codex, Cursor, Windsurf, Cline, and Copilot integrations
 
 ## Architecture
 
@@ -151,7 +174,7 @@ flowchart LR
     Engineer["Engineer In Attached Repo"] --> CLI["sentinelops CLI"]
     subgraph Repo["Project Workspace"]
         Config[".sentinelops/project.toml"]
-        AgentFiles["AGENTS.md / Copilot / Cursor / Windsurf / Codex"]
+        AgentFiles["CLAUDE / AGENTS / Codex / Cursor / Windsurf / Copilot"]
         Logs["Repo Log Roots"]
         Docs["README / Docs / Runbooks / Workflows"]
     end
@@ -167,9 +190,12 @@ flowchart LR
     Investigate --> Logs
     Workflow --> Docs
     Workflow --> Logs
-    Analyze --> Models["Ollama Models"]
+    Analyze --> Models["Ollama"]
     Investigate --> Models
     Workflow --> Models
+    Analyze --> Retrieval["Simple Index or Chroma"]
+    Investigate --> Retrieval
+    Workflow --> Retrieval
     Workflow --> RuntimeState["Repo-local Runtime State"]
 ```
 
@@ -187,7 +213,7 @@ flowchart TB
     Root --> Config["config/ local + production profiles"]
     Root --> Data["data/ packaged incident + knowledge fixtures"]
     Root --> Docs["docs/ architecture + rollout + validation"]
-    Root --> Scripts["scripts/ installers + helpers"]
+    Root --> Scripts["scripts/ installers + live checks"]
     Root --> Tests["tests/ API + runtime + plug-and-play coverage"]
 ```
 
@@ -199,7 +225,7 @@ flowchart LR
     Attach --> Detect["Detect repo markers, docs, deploy files, logs"]
     Detect --> Manifest["Write .sentinelops/project.toml"]
     Detect --> Context["Write .sentinelops/agent-context.md"]
-    Detect --> Integrations["Generate agent/editor files"]
+    Detect --> Integrations["Generate Claude and other agent files"]
     Manifest --> Start["sentinelops"]
     Start --> Runtime["Apply runtime env from project config"]
     Runtime --> API["FastAPI app + console"]
@@ -215,10 +241,11 @@ flowchart LR
     Settings --> FileTools["Safe File Tools"]
     Settings --> Loader["Knowledge Document Loader"]
     Settings --> Gateway["Ollama Gateway"]
+    Settings --> Store["Simple Store or Chroma Store"]
     FileTools --> Logs["Configured Log Roots"]
     Loader --> RepoDocs["Configured Doc Roots"]
     Gateway --> Model["Local Model Runtime"]
-    Service --> Response["Structured Incident Response"]
+    Store --> Response["Grounded Incident Response"]
 ```
 
 ### Data and storage flow
@@ -229,6 +256,7 @@ flowchart LR
     Settings --> LogRoots["allowed_log_roots"]
     Settings --> DocRoots["workspace_doc_roots"]
     Settings --> Models["analyze / investigate / embedding models"]
+    Settings --> Backend["simple or chroma backend"]
     Settings --> Storage["runtime storage paths"]
     Storage --> Incidents["incident history"]
     Storage --> Workflow["workflow checkpoints"]
@@ -244,6 +272,7 @@ More detailed breakdowns live in [docs/architecture.md](docs/architecture.md).
 
 | Agent / Tool | Generated Surface | What it Gives You |
 | --- | --- | --- |
+| Claude Code | `.claude/skills/`, `.claude/agents/`, merged `CLAUDE.md` block | Repo-local SentinelOps skills, a dedicated ops subagent, and always-on project memory |
 | Codex | `.agents/plugins/marketplace.json`, `plugins/sentinelops-copilot/` | Repo-local plugin, skill, commands, and marketplace entry |
 | Cursor | `.cursor/rules/sentinelops.mdc` | Always-on repo rule for ops and incident work |
 | Windsurf | `.windsurf/rules/sentinelops.md` | Repo-local ops-copilot instruction file |
@@ -253,7 +282,7 @@ More detailed breakdowns live in [docs/architecture.md](docs/architecture.md).
 
 Safety behavior:
 
-- shared files like `AGENTS.md`, `.agents/plugins/marketplace.json`, and `.github/copilot-instructions.md` are merged instead of blindly replaced
+- shared files like `AGENTS.md`, `CLAUDE.md`, `.agents/plugins/marketplace.json`, and `.github/copilot-instructions.md` are merged instead of blindly replaced
 - dedicated generated files are preserved unless you re-run with `--overwrite`
 
 ## Core Product Surfaces
@@ -297,8 +326,7 @@ docker compose up --build sentinelops-postgres sentinelops-keycloak sentinelops-
 
 ```bash
 uv sync
-ollama pull mistral:7b-instruct
-ollama pull nomic-embed-text
+uv run sentinelops pull-models
 uv run sentinelops
 ```
 
@@ -323,13 +351,20 @@ uv run python scripts/run_operations_report.py
 Repo-local acceptance path:
 
 ```bash
-sentinelops attach --agent all
+sentinelops attach --agent all --knowledge-backend chroma
+sentinelops pull-models
 sentinelops paths
 sentinelops doctor
 sentinelops start --no-browser
 ```
 
-Live dependency check:
+Strict live dummy-repo validation:
+
+```bash
+uv run python scripts/run_repo_live_check.py --pull-models
+```
+
+Optional live dependency test:
 
 ```bash
 set SENTINELOPS_RUN_LIVE_TESTS=1
@@ -355,7 +390,7 @@ uv run pytest -q tests/test_live_stack.py
 - `data/knowledge/` packaged runbooks, notes, and reference docs
 - `docs/` architecture, rollout, validation, and communication assets
 - `samples/` starter logs and local demo artifacts
-- `scripts/` installers, startup helpers, and reporting commands
+- `scripts/` installers, startup helpers, and live validation commands
 - `tests/` API, runtime, workflow, and plug-and-play verification coverage
 
 ## License

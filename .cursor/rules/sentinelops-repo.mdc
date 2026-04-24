@@ -6,5 +6,6 @@ This repository is the source for SentinelOps, a plug-and-play incident and oper
 
 - Keep CLI, repo attachment, and generated agent/editor integrations aligned.
 - Treat `.sentinelops/project.toml` as the repo-local single-config contract when changing attach/runtime behavior.
+- Keep Claude Code skills, `CLAUDE.md`, and other generated agent files aligned with the CLI flow.
 - Update README and repo docs when install, version, production, or validation flows change.
 - When operational context matters, prefer SentinelOps-specific docs and commands over generic advice.

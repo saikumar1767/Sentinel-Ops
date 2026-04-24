@@ -22,7 +22,8 @@ Keep these tabs ready:
 If you want to show the repo-local copilot story first, run this once inside a demo repo:
 
 ```bash
-sentinelops attach --agent all
+sentinelops attach --agent all --knowledge-backend chroma
+sentinelops pull-models
 ```
 
 ## Suggested Order
@@ -39,6 +40,7 @@ Point to:
 
 - `.sentinelops/project.toml`
 - `.sentinelops/agent-context.md`
+- `.claude/skills/`
 - `AGENTS.md`
 - generated agent/editor files
 

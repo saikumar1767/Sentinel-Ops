@@ -236,6 +236,23 @@ class RuntimeHealthService:
                 metadata={"backend": self.settings.knowledge_store_backend},
             )
 
+        if self.settings.chroma_client_mode == "persistent":
+            chroma_path = self.settings.chroma_path
+            writable = chroma_path.exists() or self._can_create(chroma_path)
+            return HealthDependency(
+                status="ok" if writable else "unavailable",
+                detail=(
+                    "Using embedded persistent Chroma storage."
+                    if writable
+                    else "Persistent Chroma data path is not writable."
+                ),
+                metadata={
+                    "client_mode": self.settings.chroma_client_mode,
+                    "data_path": str(chroma_path),
+                    "auto_start": False,
+                },
+            )
+
         detail = "Chroma is reachable."
         status = "ok" if self.chroma_runtime.is_ready() else "unavailable"
         if status != "ok":
