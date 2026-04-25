@@ -69,6 +69,45 @@ def test_root_cause_engine_builds_causal_database_hypothesis() -> None:
     assert "Dominant hypothesis" in report.prompt_summary()
 
 
+def test_root_cause_engine_identifies_deployment_config_and_schema_blocker() -> None:
+    records = [
+        ToolExecutionRecord(
+            name="read_log_file",
+            arguments={"path": "logs/deploy-current.log"},
+            ok=True,
+            payload={
+                "ok": True,
+                "path": "logs/deploy-current.log",
+                "selected_lines": [
+                    "2: 2026-04-20T11:00:02Z ERROR missing required environment variable CHECKOUT_DB_URL",
+                    "3: 2026-04-20T11:00:04Z ERROR rollout halted because schema version mismatch was detected",
+                ],
+            },
+        )
+    ]
+
+    report = RootCauseEngine().analyze(
+        request=InvestigateRequest(
+            prompt="Investigate the rollout failure for checkout.",
+            incident_type_hint="deployment",
+        ),
+        records=records,
+        retrieval_hits=[],
+    )
+
+    assert report.incident_type == "deployment"
+    assert report.severity == "high"
+    assert report.root_cause == (
+        "Deployment is halted by missing environment variable CHECKOUT_DB_URL "
+        "and schema version mismatch"
+    )
+    assert report.primary_hypothesis is not None
+    assert "deployment_missing_environment" in report.primary_hypothesis.supporting_signals
+    assert "deployment_schema_mismatch" in report.primary_hypothesis.supporting_signals
+    assert any("readiness" in step.lower() for step in report.next_steps)
+    assert "No deterministic failure signal matched the current evidence." not in report.to_diagnostics().missing_evidence
+
+
 class KeywordEmbeddingProvider:
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         return [[float("database" in text.lower()), float("timeout" in text.lower())] for text in texts]

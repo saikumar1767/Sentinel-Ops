@@ -303,6 +303,27 @@ def run_api_checks(*, api_base: str, project_root: Path, knowledge_backend: str)
     assert_incident(investigate_database, expected="database", citation_hint="runbooks/database.md")
     assert_incident(investigate_authentication, expected="authentication", citation_hint="runbooks/authentication.md")
     assert_incident(investigate_deployment, expected="deployment", citation_hint="ops/deployment.md")
+    assert_root_cause_diagnostics(
+        investigate_database,
+        expected="database",
+        expected_signals={"connection_pool_exhaustion", "database_timeout", "stalled_database_checkout"},
+        regression_detected=True,
+        root_cause_hint="connection pool exhaustion",
+    )
+    assert_root_cause_diagnostics(
+        investigate_authentication,
+        expected="authentication",
+        expected_signals={"authentication_abuse"},
+        regression_detected=False,
+        root_cause_hint="authentication failures",
+    )
+    assert_root_cause_diagnostics(
+        investigate_deployment,
+        expected="deployment",
+        expected_signals={"deployment_missing_environment", "deployment_schema_mismatch"},
+        regression_detected=False,
+        root_cause_hint="CHECKOUT_DB_URL",
+    )
 
     _, workflow_start = api_json(
         "POST",
@@ -326,8 +347,38 @@ def run_api_checks(*, api_base: str, project_root: Path, knowledge_backend: str)
 
     assert_true(workflow_approve["status"] == "completed", "workflow did not complete after approval")
     assert_true(workflow_approve["approval_status"] == "approved", "workflow approval status mismatch")
+    assert_root_cause_diagnostics(
+        workflow_approve,
+        expected="database",
+        expected_signals={"connection_pool_exhaustion", "database_timeout", "stalled_database_checkout"},
+        regression_detected=True,
+        root_cause_hint="connection pool exhaustion",
+    )
+    assert_root_cause_diagnostics(
+        workflow_approve["final_report"],
+        expected="database",
+        expected_signals={"connection_pool_exhaustion", "database_timeout", "stalled_database_checkout"},
+        regression_detected=True,
+        root_cause_hint="connection pool exhaustion",
+    )
     assert_true(workflow_audit["total_events"] >= 1, "workflow audit trail missing")
     assert_true(any(item["thread_id"] == thread_id for item in workflow_threads["threads"]), "workflow thread list missing new thread")
+
+    _, prior_memory_search = api_json(
+        "POST",
+        f"{api_base}/knowledge/search",
+        {
+            "query": "prior checkout database connection pool exhaustion incident",
+            "top_k": 5,
+            "document_types": ["prior_incident"],
+            "incident_type_hint": "database",
+        },
+    )
+    assert_true(
+        any(item["document_type"] == "prior_incident" for item in prior_memory_search["results"]),
+        "saved incident memory was not searchable as prior_incident knowledge",
+    )
+    saved_incidents = assert_saved_incident_files(project_root, min_count=4)
 
     return {
         "me": me,
@@ -348,6 +399,8 @@ def run_api_checks(*, api_base: str, project_root: Path, knowledge_backend: str)
         "workflow_approve": workflow_approve,
         "workflow_audit": workflow_audit,
         "workflow_threads": workflow_threads,
+        "prior_memory_search": prior_memory_search,
+        "saved_incident_files": saved_incidents,
     }
 
 
@@ -360,6 +413,52 @@ def assert_incident(payload: dict[str, object], *, expected: str, citation_hint:
         any(citation_hint in citation for citation in citations) or citation_hint.replace(".md", "").split("/")[-1] in evidence.lower(),
         f"expected repo-local evidence for {expected}, got citations={citations} evidence={evidence}",
     )
+
+
+def assert_root_cause_diagnostics(
+    payload: dict[str, object],
+    *,
+    expected: str,
+    expected_signals: set[str],
+    regression_detected: bool,
+    root_cause_hint: str,
+) -> None:
+    diagnostics = payload.get("root_cause_diagnostics")
+    assert_true(isinstance(diagnostics, dict), "root_cause_diagnostics missing")
+    assert_true(
+        diagnostics.get("generated_by") == "deterministic_root_cause_engine",
+        "unexpected root cause diagnostics generator",
+    )
+    assert_true(diagnostics.get("incident_type") == expected, "root cause incident type mismatch")
+    assert_true(
+        diagnostics.get("regression_detected") is regression_detected,
+        "root cause regression flag mismatch",
+    )
+    primary_root_cause = str(diagnostics.get("primary_root_cause") or "")
+    assert_true(root_cause_hint.lower() in primary_root_cause.lower(), "primary root cause hint missing")
+    signal_names = {
+        str(signal.get("name"))
+        for signal in diagnostics.get("signals", [])
+        if isinstance(signal, dict)
+    }
+    missing = expected_signals - signal_names
+    assert_true(not missing, f"missing root cause signals: {sorted(missing)}")
+    assert_true(bool(diagnostics.get("timeline")), "root cause timeline missing")
+
+
+def assert_saved_incident_files(project_root: Path, *, min_count: int) -> list[str]:
+    incident_dir = project_root / ".sentinelops" / "data" / "runtime" / "recent_incidents"
+    files = sorted(incident_dir.glob("*.json"))
+    assert_true(len(files) >= min_count, f"expected at least {min_count} saved incidents, got {len(files)}")
+
+    summaries: list[str] = []
+    for path in files:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        assert_true(payload.get("top_error_lines"), f"saved incident missing top_error_lines: {path.name}")
+        assert_true(payload.get("next_steps"), f"saved incident missing next_steps: {path.name}")
+        assert_true(payload.get("root_cause_diagnostics"), f"saved incident missing diagnostics: {path.name}")
+        summaries.append(path.name)
+    return summaries
 
 
 def create_dummy_repo(project_root: Path) -> None:

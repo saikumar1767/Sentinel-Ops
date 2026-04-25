@@ -167,6 +167,9 @@ _SIGNAL_PATTERNS = (
     _SignalPattern("database_timeout", "database", "high", 4.0, re.compile(r"database.*timeout|timeout.*database|postgres.*timeout", re.I)),
     _SignalPattern("stalled_database_checkout", "database", "high", 3.5, re.compile(r"stalled.*database connection|waiting for (?:a )?free database connection", re.I)),
     _SignalPattern("database_deadlock", "database", "high", 4.5, re.compile(r"deadlock|lock wait timeout", re.I)),
+    _SignalPattern("deployment_missing_environment", "deployment", "high", 4.5, re.compile(r"missing required environment variable|missing .*env(?:ironment)? variable|environment variable .*missing", re.I)),
+    _SignalPattern("deployment_schema_mismatch", "deployment", "high", 4.0, re.compile(r"schema version mismatch|schema mismatch|migration .*mismatch|incompatible schema", re.I)),
+    _SignalPattern("rollout_halted", "deployment", "high", 3.5, re.compile(r"rollout halted|deployment failed|release blocked|rollout failed", re.I)),
     _SignalPattern("missing_configuration", "configuration", "high", 4.5, re.compile(r"missing (?:env|environment|config|configuration|secret)|required .* not set", re.I)),
     _SignalPattern("dns_resolution_failure", "network", "high", 4.0, re.compile(r"dns|resolve|resolution|lookup.*timed out", re.I)),
     _SignalPattern("packet_loss", "network", "medium", 3.5, re.compile(r"packet loss|connection reset|network unreachable", re.I)),
@@ -404,6 +407,23 @@ class RootCauseEngine:
                 return f"Missing configuration value {variable} is blocking service startup or readiness"
             return "Missing required configuration is blocking service startup or readiness"
 
+        if incident_type == "deployment":
+            variable = self._first_config_key(signals)
+            has_missing_environment = "deployment_missing_environment" in signal_names
+            has_schema_mismatch = "deployment_schema_mismatch" in signal_names
+            if has_missing_environment and has_schema_mismatch:
+                if variable:
+                    return f"Deployment is halted by missing environment variable {variable} and schema version mismatch"
+                return "Deployment is halted by missing environment configuration and schema version mismatch"
+            if has_missing_environment:
+                if variable:
+                    return f"Deployment is blocked by missing environment variable {variable}"
+                return "Deployment is blocked by missing required environment configuration"
+            if has_schema_mismatch:
+                return "Deployment is blocked by schema version mismatch or migration incompatibility"
+            if "rollout_halted" in signal_names:
+                return "Rollout guardrails halted the deployment before the service became healthy"
+
         if incident_type == "network":
             if "dns_resolution_failure" in signal_names:
                 return "DNS resolution failures are preventing the service from reaching a required dependency"
@@ -430,10 +450,12 @@ class RootCauseEngine:
 
     @staticmethod
     def _first_config_key(signals: list[EvidenceSignal]) -> str:
+        ignored = {"DEBUG", "INFO", "WARN", "WARNING", "ERROR", "FATAL", "CRITICAL"}
         for signal in signals:
-            match = re.search(r"\b[A-Z][A-Z0-9_]{2,}\b", signal.normalized_line)
-            if match:
-                return match.group(0)
+            for match in re.finditer(r"\b[A-Z][A-Z0-9_]{2,}\b", signal.normalized_line):
+                value = match.group(0)
+                if value not in ignored:
+                    return value
         return ""
 
     @staticmethod
@@ -459,6 +481,17 @@ class RootCauseEngine:
                 "Compare the failure window with DNS, ingress, firewall, or subnet changes.",
                 "Fail over or route around the broken path only after impact and rollback are clear.",
             ]
+        if incident_type == "deployment":
+            steps = [
+                "Keep the rollout paused or roll back until readiness and compatibility checks pass.",
+                "Compare the failing release against the last healthy deployment and config snapshot.",
+            ]
+            if "deployment_missing_environment" in signal_names:
+                steps.append("Restore the missing environment variable through the reviewed config or secret path.")
+            if "deployment_schema_mismatch" in signal_names:
+                steps.append("Validate migration compatibility and schema version before resuming rollout.")
+            steps.append("Re-run deployment readiness checks before sending normal traffic to the new version.")
+            return steps
         if incident_type == "queue":
             return [
                 "Measure backlog growth, consumer lag, and producer rate for the affected queue.",
