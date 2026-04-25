@@ -24,6 +24,7 @@ def build_sentinel_workflow(
     workflow.add_node("incident_classifier_node", nodes.incident_classifier_node)
     workflow.add_node("tool_evidence_node", nodes.tool_evidence_node)
     workflow.add_node("retrieval_node", nodes.retrieval_node)
+    workflow.add_node("causal_analysis_node", nodes.causal_analysis_node)
     workflow.add_node("hypothesis_node", nodes.hypothesis_node)
     workflow.add_node("remediation_node", nodes.remediation_node)
     workflow.add_node("approval_node", nodes.approval_node)
@@ -33,7 +34,8 @@ def build_sentinel_workflow(
     workflow.add_edge("intake_node", "incident_classifier_node")
     workflow.add_edge("incident_classifier_node", "tool_evidence_node")
     workflow.add_edge("tool_evidence_node", "retrieval_node")
-    workflow.add_edge("retrieval_node", "hypothesis_node")
+    workflow.add_edge("retrieval_node", "causal_analysis_node")
+    workflow.add_edge("causal_analysis_node", "hypothesis_node")
     workflow.add_edge("hypothesis_node", "remediation_node")
     workflow.add_conditional_edges(
         "remediation_node",

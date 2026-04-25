@@ -62,16 +62,7 @@ class ChromaKnowledgeStore:
             name=self.collection_name,
             embedding_function=None,
         )
-        batch_size = max(1, min(self.settings.embedding_batch_size, 32))
-        for start in range(0, len(chunks), batch_size):
-            batch_chunks = chunks[start : start + batch_size]
-            batch_embeddings = embeddings[start : start + batch_size]
-            collection.upsert(
-                ids=[chunk.chunk_id for chunk in batch_chunks],
-                documents=[chunk.content for chunk in batch_chunks],
-                metadatas=[chunk.to_metadata() for chunk in batch_chunks],
-                embeddings=batch_embeddings,
-            )
+        self._upsert_chunks(collection=collection, chunks=chunks, embeddings=embeddings)
 
         source_counts = Counter()
         seen_documents: dict[str, str] = {}
@@ -90,6 +81,24 @@ class ChromaKnowledgeStore:
             chunk_counts=dict(chunk_counts),
             status="indexed",
         )
+
+    def upsert(
+        self,
+        *,
+        chunks: list[KnowledgeChunk],
+        embeddings: list[list[float]],
+    ) -> int:
+        if len(chunks) != len(embeddings):
+            raise ValueError("Chunk and embedding counts must match.")
+        if not chunks:
+            return 0
+
+        collection = self._get_client().get_or_create_collection(
+            name=self.collection_name,
+            embedding_function=None,
+        )
+        self._upsert_chunks(collection=collection, chunks=chunks, embeddings=embeddings)
+        return len(chunks)
 
     def count(self) -> int:
         collection = self._get_client().get_or_create_collection(
@@ -148,6 +157,24 @@ class ChromaKnowledgeStore:
             )
 
         return hits
+
+    def _upsert_chunks(
+        self,
+        *,
+        collection,
+        chunks: list[KnowledgeChunk],
+        embeddings: list[list[float]],
+    ) -> None:
+        batch_size = max(1, min(self.settings.embedding_batch_size, 32))
+        for start in range(0, len(chunks), batch_size):
+            batch_chunks = chunks[start : start + batch_size]
+            batch_embeddings = embeddings[start : start + batch_size]
+            collection.upsert(
+                ids=[chunk.chunk_id for chunk in batch_chunks],
+                documents=[chunk.content for chunk in batch_chunks],
+                metadatas=[chunk.to_metadata() for chunk in batch_chunks],
+                embeddings=batch_embeddings,
+            )
 
     def _reset_collection(self) -> None:
         if self.settings.chroma_client_mode == "persistent" and self._client is None:

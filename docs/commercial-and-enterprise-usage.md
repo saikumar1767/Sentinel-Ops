@@ -12,6 +12,9 @@ The repository now includes:
 - a single repo-local project config in `.sentinelops/project.toml`
 - Claude Code skills and project memory generation for attached repos
 - one-command local model bootstrap via `sentinelops pull-models`
+- deterministic root-cause diagnostics for one-shot and LangGraph workflow investigations
+- repo-local incident memory indexing so saved summaries can support future retrieval
+- bounded request-body handling, standard browser security headers, constant-time token comparisons, and resilient SQLite defaults
 - shared Postgres-capable metadata persistence and Postgres-backed workflow checkpoint support
 - deterministic local retrieval pins for Chroma `0.4.24`, NumPy `<2`, ONNX Runtime `<1.20`, and PostHog `<3` after live Windows validation exposed native crashes in newer transitive versions
 
@@ -63,6 +66,7 @@ Repo-local installation makes SentinelOps easier to adopt, but it also means the
 - operational logs
 - workflow metadata
 - generated incident history
+- saved root-cause diagnostics and prior incident memory
 
 That is useful, but it also raises the importance of:
 
@@ -80,7 +84,8 @@ That is useful, but it also raises the importance of:
 4. Confirm telemetry export, alerting, and on-call ownership are live.
 5. Confirm your connected models and corpora have passed internal legal and security review.
 6. Confirm retention and redaction policies for logs, prompts, and retrieved artifacts.
-7. Confirm repo-local adoption guidance exists for the teams that will attach SentinelOps to their projects.
+7. Confirm retention and redaction policies for saved incidents, root-cause diagnostics, and indexed prior incident memory.
+8. Confirm repo-local adoption guidance exists for the teams that will attach SentinelOps to their projects.
 
 ## Why This Still Matters Even With Apache-2.0
 

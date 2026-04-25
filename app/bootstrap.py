@@ -636,6 +636,7 @@ Use SentinelOps when the task involves:
 - readiness or health checks
 - remediation workflows
 - deployment or service failure analysis
+- root-cause diagnostics and prior incident memory
 
 ## Project Log Roots
 
@@ -658,6 +659,8 @@ Use SentinelOps when the task involves:
 - Start with `sentinelops paths` to confirm the active workspace.
 - Use `sentinelops doctor` before assuming model-backed investigation is ready.
 - `.sentinelops/project.toml` is the single repo-local control file for logs, docs, models, runtime host, and storage paths.
+- Inspect `root_cause_diagnostics` when SentinelOps API output is available.
+- Treat saved incident history as repo-local memory that may help with repeat failures.
 - Keep operational guidance grounded in this repository and the resources listed in `.sentinelops/project.toml`.
 """
 

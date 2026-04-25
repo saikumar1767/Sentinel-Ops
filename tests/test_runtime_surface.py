@@ -16,6 +16,7 @@ from app.dependencies import (
 )
 from app.main import app
 from app.ollama_client import OllamaGateway
+from app.persistence import build_metadata_engine
 from app.rag.service import KnowledgeBaseService
 from app.runtime_metrics import RuntimeMetrics
 from app.schemas import AnalyzeRequest, AnalyzeResponse, RetrievalHit, WorkflowAuditResponse
@@ -178,6 +179,9 @@ def test_operational_routes_are_public_and_health_stays_available() -> None:
     assert analyze.json()["incident_type"] == "database"
     assert analyze.headers["X-Request-ID"]
     assert analyze.headers["X-Process-Time-Ms"]
+    assert analyze.headers["X-Content-Type-Options"] == "nosniff"
+    assert analyze.headers["X-Frame-Options"] == "DENY"
+    assert analyze.headers["Referrer-Policy"] == "no-referrer"
 
 
 def test_openapi_does_not_advertise_security_schemes() -> None:
@@ -215,6 +219,7 @@ def test_openapi_does_not_advertise_security_schemes() -> None:
 def test_auth_enabled_routes_require_identity_and_admin_for_metrics(monkeypatch) -> None:
     reset_singletons()
     monkeypatch.setenv("SENTINELOPS_AUTH_MODE", "api_key")
+    monkeypatch.setenv("SENTINELOPS_AUTH_API_KEY", "header-secret")
     monkeypatch.setenv(
         "SENTINELOPS_AUTH_BEARER_TOKENS",
         json.dumps(
@@ -249,6 +254,11 @@ def test_auth_enabled_routes_require_identity_and_admin_for_metrics(monkeypatch)
             headers={"Authorization": "Bearer analyst-token"},
             json={"log_text": "2026-04-06 09:10:22 ERROR database connection timeout after 30 seconds"},
         )
+        header_authorized = client.post(
+            "/analyze",
+            headers={"X-API-Key": "header-secret"},
+            json={"log_text": "2026-04-06 09:10:22 ERROR database connection timeout after 30 seconds"},
+        )
         me = client.get("/me", headers={"Authorization": "Bearer analyst-token"})
         forbidden_metrics = client.get("/metrics", headers={"Authorization": "Bearer analyst-token"})
         admin_metrics = client.get("/metrics", headers={"Authorization": "Bearer admin-token"})
@@ -259,6 +269,7 @@ def test_auth_enabled_routes_require_identity_and_admin_for_metrics(monkeypatch)
     assert unauthorized.status_code == 401
     assert health.status_code == 200
     assert authorized.status_code == 200
+    assert header_authorized.status_code == 200
     assert me.status_code == 200
     assert me.json()["subject"] == "analyst-1"
     assert me.json()["roles"] == ["analyst"]
@@ -310,6 +321,29 @@ def test_request_validation_errors_use_problem_details() -> None:
     payload = response.json()
     assert payload["title"] == "Request validation failed"
     assert payload["code"] == "request_validation_failed"
+
+
+def test_request_body_limit_returns_problem_details(monkeypatch) -> None:
+    reset_singletons()
+    monkeypatch.setenv("SENTINELOPS_MAX_REQUEST_BODY_BYTES", "1024")
+    reset_singletons()
+    client = TestClient(app)
+
+    try:
+        response = client.post(
+            "/analyze",
+            content=json.dumps({"log_text": "x" * 2048}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+    finally:
+        reset_singletons()
+
+    assert response.status_code == 413
+    assert response.headers["content-type"].startswith("application/problem+json")
+    payload = response.json()
+    assert payload["title"] == "Request body too large"
+    assert payload["code"] == "request_body_too_large"
+    assert response.headers["X-Request-ID"]
 
 
 def test_metrics_endpoint_reports_request_usage() -> None:
@@ -495,6 +529,20 @@ def test_validate_settings_accepts_hardened_production_profile() -> None:
     )
 
     validate_settings(settings)
+
+
+def test_sqlite_metadata_engine_enables_production_pragmas(tmp_path) -> None:
+    database_path = tmp_path / "metadata.sqlite"
+    engine = build_metadata_engine(f"sqlite:///{database_path.as_posix()}")
+
+    with engine.connect() as connection:
+        busy_timeout = connection.exec_driver_sql("PRAGMA busy_timeout").scalar()
+        foreign_keys = connection.exec_driver_sql("PRAGMA foreign_keys").scalar()
+        journal_mode = connection.exec_driver_sql("PRAGMA journal_mode").scalar()
+
+    assert busy_timeout == 30_000
+    assert foreign_keys == 1
+    assert str(journal_mode).lower() == "wal"
 
 
 def test_ollama_gateway_wraps_connection_errors_as_request_errors() -> None:

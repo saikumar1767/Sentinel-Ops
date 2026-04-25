@@ -362,6 +362,7 @@ class WorkflowService:
             tool_results=tool_results,
             retrieved_chunks=retrieved_chunks,
             final_report=values.get("final_report"),
+            root_cause_diagnostics=values.get("root_cause_diagnostics"),
             errors=errors,
         )
 
@@ -477,6 +478,7 @@ class WorkflowService:
             "incident_classifier_node": "classify_incident",
             "tool_evidence_node": "gather_evidence",
             "retrieval_node": "retrieve_supporting_docs",
+            "causal_analysis_node": "analyze_root_cause",
             "hypothesis_node": "draft_hypothesis",
             "remediation_node": "draft_remediation",
             "approval_node": "awaiting_approval",

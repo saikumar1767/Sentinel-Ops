@@ -96,6 +96,7 @@ def install_exception_handlers(app: FastAPI) -> None:
             403: ("forbidden", "Forbidden"),
             404: ("resource_not_found", "Resource not found"),
             409: ("request_conflict", "Request conflict"),
+            413: ("request_body_too_large", "Request body too large"),
             422: ("request_validation_failed", "Request validation failed"),
             429: ("rate_limited", "Rate limited"),
             502: ("upstream_failure", "Upstream failure"),

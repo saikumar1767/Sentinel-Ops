@@ -2,13 +2,13 @@
 
 ## 30-Second Version
 
-SentinelOps is a plug-and-play incident and operations copilot I built to turn messy log evidence into grounded incident responses. It combines FastAPI, Ollama, safe local tools, retrieval, and approval-aware workflows, and it can now attach directly to any repo so the copilot understands project-specific runbooks, deployment files, and log roots.
+SentinelOps is a plug-and-play incident and operations copilot I built to turn messy log evidence into grounded incident responses. It combines FastAPI, Ollama, safe local tools, retrieval, deterministic root-cause diagnostics, and approval-aware workflows, and it can now attach directly to any repo so the copilot understands project-specific runbooks, deployment files, log roots, and prior incidents.
 
 ## 2-Minute Version
 
 The problem I focused on was incident triage speed and clarity. Teams usually have logs, runbooks, deployment files, and prior incident notes, but the evidence is fragmented and hard to turn into a grounded response quickly. I built SentinelOps as an installable service that can run locally, attach to a repo, retrieve relevant knowledge, and return structured output instead of open-ended text.
 
-There are three main paths. `/analyze` is the fast route for pasted logs. `/investigate` is the one-shot operator path that reads repo-local logs, compares runs, and retrieves supporting knowledge. `/workflow/*` is the durable path with checkpoints, approval pauses, and audit history for more sensitive remediation planning.
+There are three main paths. `/analyze` is the fast route for pasted logs. `/investigate` is the one-shot operator path that reads repo-local logs, compares runs, retrieves supporting knowledge, and emits typed root-cause diagnostics. `/workflow/*` is the durable LangGraph path with a causal-analysis stage, checkpoints, approval pauses, and audit history for more sensitive remediation planning.
 
 One of the key productization steps was making it feel like a real copilot product instead of only a source repo demo. The CLI can now attach SentinelOps to any repo, create `.sentinelops/`, generate repo-local agent/editor integrations, and keep the attached workspace as the source of operational context.
 
@@ -25,7 +25,7 @@ The core problem is not only summarizing logs. It is building a repeatable path 
 
 ### Architecture
 
-The API shell is FastAPI. Model calls go through Ollama. Retrieval can blend packaged knowledge with repo-local docs and runbooks. The workflow layer uses LangGraph where checkpointing and approval pauses add real value. On top of that, SentinelOps includes an operator console, incident library, evaluation summary, durable thread history, and generated agent/editor integrations.
+The API shell is FastAPI. Model calls go through Ollama. Retrieval can blend packaged knowledge, repo-local docs, runbooks, and saved incident memory. A deterministic root-cause engine extracts failure signals, regression deltas, timelines, and missing evidence before the model summarizes anything. The workflow layer uses LangGraph where causal analysis, checkpointing, and approval pauses add real value. On top of that, SentinelOps includes an operator console, incident library, evaluation summary, durable thread history, and generated agent/editor integrations.
 
 ### Technical Decisions
 
@@ -36,12 +36,15 @@ The API shell is FastAPI. Model calls go through Ollama. Retrieval can blend pac
    `.sentinelops/project.toml` and `.sentinelops/agent-context.md` let the copilot understand each attached project's operational footprint.
 
 3. Structured contracts everywhere
-   The API returns typed JSON, problem-detail errors, readiness reports, metrics snapshots, and inspectable workflow thread state.
+   The API returns typed JSON, root-cause diagnostics, problem-detail errors, readiness reports, metrics snapshots, and inspectable workflow thread state.
 
-4. Safe workflow design
+4. Deterministic brain before model language
+   Known failure signals, before/after log deltas, evidence strength, timelines, and missing evidence are computed in code, then provided to the model as grounding.
+
+5. Safe workflow design
    Instead of acting autonomously, the workflow pauses before risky remediation and records the result in audit history.
 
-5. Product surfaces are part of the architecture
+6. Product surfaces are part of the architecture
    The console, incident library, timeline, validations, installers, and generated agent integrations are treated as core product surfaces, not optional polish.
 
 ### Tradeoffs
@@ -61,6 +64,7 @@ One real lesson was that "feature complete" does not mean "operator ready" and "
 - expand telemetry and operational ownership
 - add more formal workspace and team separation
 - deepen governance around retention, PII handling, and model/legal review
+- expand the incident-signal library for more company-specific failure modes
 
 ## Likely Interviewer Questions
 
@@ -70,7 +74,7 @@ Because the core challenge was proving product value and system design on constr
 
 ### Why LangGraph?
 
-Because the workflow benefits from checkpointing, inspectable state, and approval pauses. I avoided heavier orchestration layers until there was a real need.
+Because the workflow benefits from an explicit causal-analysis stage, checkpointing, inspectable state, and approval pauses. I avoided heavier orchestration layers until there was a real need.
 
 ### How do you know it works?
 

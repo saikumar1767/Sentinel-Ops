@@ -3,6 +3,7 @@ app_version = "0.8.0"
 deployment_mode = "local"
 log_level = "INFO"
 startup_validate_config = true
+max_request_body_bytes = 1048576
 
 telemetry_enabled = false
 telemetry_service_name = "sentinelops-api"
@@ -33,6 +34,7 @@ retrieval_cache_ttl_seconds = 900
 retrieval_cache_max_entries = 256
 
 console_timeline_limit = 12
+incident_memory_auto_index = true
 workflow_recent_threads_limit = 25
 persisted_incident_limit = 100
 

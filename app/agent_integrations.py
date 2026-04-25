@@ -334,7 +334,7 @@ description: Use when a repository has SentinelOps attached and the user needs r
 
 ## Overview
 
-This repository is wired for SentinelOps as a repo-local operations copilot. Use it whenever the task is about operational state, incidents, logs, deploy health, runbooks, readiness, remediation, or incident workflows for `{workspace_name}`.
+This repository is wired for SentinelOps as a repo-local operations copilot. Use it whenever the task is about operational state, incidents, logs, deploy health, runbooks, readiness, remediation, root-cause diagnostics, incident memory, or incident workflows for `{workspace_name}`.
 
 Start with SentinelOps context instead of guessing from code alone.
 
@@ -350,6 +350,8 @@ Start with SentinelOps context instead of guessing from code alone.
 
 - Treat `.sentinelops/project.toml` as the local source of truth for workspace name, logs, docs, models, runtime host, and storage paths.
 - Prefer repo-relative operational evidence before falling back to generic advice.
+- Inspect `root_cause_diagnostics` when SentinelOps API output is available.
+- Treat saved incident history as repo-local memory that may help with repeat failures.
 - If `sentinelops doctor` reports Ollama unavailable, explain that model-backed investigate or analyze paths need a reachable model host such as `ollama serve`.
 - Do not assume production auth, shared databases, or telemetry are enabled unless SentinelOps config says so.
 
@@ -414,7 +416,8 @@ Use SentinelOps as the first operational copilot for this repository.
 1. Read `.sentinelops/agent-context.md`.
 2. Run `sentinelops doctor` if readiness matters.
 3. Use the repository docs, runbooks, workflows, and log roots listed by SentinelOps.
-4. If needed, start SentinelOps and use its API or console routes to ground the investigation.
+4. Inspect `root_cause_diagnostics` and saved incident memory when SentinelOps API output is available.
+5. If needed, start SentinelOps and use its API or console routes to ground the investigation.
 """
 
 
@@ -432,6 +435,7 @@ SentinelOps is attached to this repository as a repo-local operations copilot fo
 - Use `sentinelops paths` before assuming workspace details.
 - Use `sentinelops doctor` before depending on model-backed analyze or investigate flows.
 - Treat `.sentinelops/project.toml` as the single repo-local control file for docs, logs, models, runtime hosts, retrieval backend settings, and local storage paths.
+- Prefer SentinelOps `root_cause_diagnostics` when API output is available, and treat saved incident history as repo-local memory.
 
 ## Preferred Skills
 
@@ -468,6 +472,7 @@ allowed-tools: Bash Read Grep Glob
    - project manifest path
    - configured doc roots and log roots
    - active models and retrieval backend
+   - whether incident-memory indexing is enabled if config output exposes it
    - anything missing or degraded
 
 If Ollama is reachable but models are missing, tell the user to run `/sentinelops-pull-models`.
@@ -513,6 +518,8 @@ When the user asks about incidents, logs, readiness, deployment failures, or run
    - repo logs
    - repo runbooks
    - SentinelOps analyze/investigate/workflow routes when available
+   - `root_cause_diagnostics` when the API returns it
+   - saved incident memory when a similar prior incident exists
 
 Do not claim features are ready if `sentinelops doctor` says otherwise.
 """
@@ -549,6 +556,8 @@ Always start with the repo-local SentinelOps contract:
 2. Use `sentinelops paths` to confirm workspace details.
 3. Use `sentinelops doctor` before depending on model-backed analysis.
 4. Prefer `.sentinelops/project.toml`, repo logs, repo runbooks, deploy files, and workflow artifacts over generic advice.
+5. Inspect `root_cause_diagnostics` before accepting a narrative summary when SentinelOps API output is available.
+6. Treat saved incident history as repo-local memory that may contain useful prior fixes.
 
 If readiness is degraded, report that clearly instead of pretending everything is healthy.
 """
@@ -569,7 +578,7 @@ When the task involves incidents, logs, runbooks, readiness, remediation, deploy
 - run `sentinelops pull-models` when Ollama is reachable but configured models are missing
 - use `sentinelops start --no-browser` if live API access is helpful
 
-Keep operational guidance grounded in `.sentinelops/project.toml`, repo docs, runbooks, deployment files, and repo log roots.
+Keep operational guidance grounded in `.sentinelops/project.toml`, repo docs, runbooks, deployment files, repo log roots, `root_cause_diagnostics`, and saved incident memory.
 """
 
 
@@ -583,6 +592,7 @@ This repository has SentinelOps attached as a repo-local operations copilot.
 - Use `sentinelops doctor` before relying on model-backed incident analysis.
 - Use `sentinelops pull-models` when the configured Ollama models are missing.
 - Prefer repository docs, runbooks, deploy workflows, and repo log roots over generic advice when the task is operational.
+- Use SentinelOps root-cause diagnostics and saved incident memory when available.
 """
 
 
@@ -598,6 +608,7 @@ Default flow:
 3. Run `sentinelops doctor` when readiness matters
 4. Run `sentinelops pull-models` if the configured Ollama models are missing
 5. Start SentinelOps with `sentinelops start --no-browser` if live API access helps
+6. Inspect `root_cause_diagnostics` and saved incident memory when API output is available
 """
 
 
@@ -614,6 +625,7 @@ When tasks touch logs, incidents, deploy failures, runbooks, readiness, or remed
 - use `sentinelops doctor` to verify readiness
 - use `sentinelops pull-models` when Ollama is reachable but configured models are missing
 - prefer repository-specific operational evidence over generic advice
+- prefer SentinelOps `root_cause_diagnostics` and saved incident memory when API output is available
 
 If model-backed investigation is unavailable, explain that SentinelOps needs a reachable model host such as `ollama serve`.
 {COPILOT_END_MARKER}
@@ -633,6 +645,7 @@ SentinelOps is attached to this repository as a repo-local operations copilot fo
 - Run `sentinelops doctor` before assuming model-backed investigation is ready.
 - Run `sentinelops pull-models` when configured Ollama models are missing.
 - Treat `.sentinelops/project.toml` as the repo-local source of truth for workspace resources and runtime defaults.
+- Prefer SentinelOps `root_cause_diagnostics` and saved incident memory when API output is available.
 - Prefer repository operational evidence and these log roots before giving generic advice:
 {log_lines}
 - Prefer these configured doc roots and deployment surfaces when gathering context:

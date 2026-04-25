@@ -13,17 +13,18 @@ Each profile includes:
 - the API endpoint to run
 - the request payload
 - the expected outcome
+- expected root-cause diagnostic behavior
 - operator notes and run steps
 
 ## Current Library
 
 ### Database Pool Exhaustion Workflow
 
-Best full workflow path. Shows evidence gathering, retrieval, approval pause, durable thread state, and final workflow completion.
+Best full workflow path. Shows evidence gathering, retrieval, deterministic causal analysis, approval pause, durable thread state, saved incident memory, and final workflow completion.
 
 ### Network DNS Regression Investigation
 
-Best one-shot investigation path. Shows strong retrieval support and current-versus-previous comparison.
+Best one-shot investigation path. Shows strong retrieval support, current-versus-previous comparison, regression detection, and cited root-cause diagnostics.
 
 ### Deployment Readiness Failure Analysis
 
@@ -45,3 +46,4 @@ When SentinelOps is attached to a project repo, the incident library becomes a r
 - the console stays reproducible
 - teams can compare "packaged demo" behavior with "my repo" behavior
 - workflow and approval paths remain inspectable
+- saved incident summaries become retrieval memory when incident-memory indexing is enabled

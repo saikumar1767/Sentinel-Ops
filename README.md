@@ -29,7 +29,7 @@
 
 ---
 
-SentinelOps is a local-first incident and operations copilot that attaches directly to an engineer's repository.
+SentinelOps is a local-first incident and operations copilot that attaches directly to an engineer's repository, turns repo evidence into deterministic root-cause diagnostics, and remembers completed investigations as searchable incident memory.
 
 The intended default flow is:
 
@@ -38,6 +38,7 @@ The intended default flow is:
 - run `sentinelops attach --agent all` in your project
 - let `.sentinelops/project.toml` become the repo-local control plane
 - start `sentinelops` and use the console, API, or generated Claude/Codex/editor integrations
+- let completed investigations feed the repo-local knowledge store for future retrieval
 
 The local-first path does not require login. Shared auth, OIDC, and centralized infrastructure remain optional overlays for companies that later choose a shared deployment.
 
@@ -50,6 +51,7 @@ The local-first path does not require login. Shared auth, OIDC, and centralized 
 | Model runtime | Ollama |
 | Workflow orchestration | LangGraph |
 | Retrieval | Chroma `0.4.24` pinned for stable local persistent storage, or simple local index |
+| Root-cause brain | Deterministic evidence extraction, causal hypothesis scoring, regression detection, and incident-memory indexing |
 | Persistence | SQLite by default, Postgres optional |
 | Observability | OpenTelemetry |
 | Packaging | `uv`, Hatchling |
@@ -108,6 +110,7 @@ SentinelOps treats `.sentinelops/project.toml` as the single repo-local control 
 - Ollama host
 - retrieval backend and Chroma settings
 - repo-local runtime storage paths
+- incident history paths used by the automatic incident-memory loop
 
 Example generated shape:
 
@@ -190,12 +193,16 @@ flowchart LR
     Investigate --> Logs
     Workflow --> Docs
     Workflow --> Logs
+    Investigate --> Brain["Root-Cause Engine"]
+    Workflow --> Brain
     Analyze --> Models["Ollama"]
     Investigate --> Models
     Workflow --> Models
     Analyze --> Retrieval["Simple Index or Chroma"]
     Investigate --> Retrieval
     Workflow --> Retrieval
+    Brain --> IncidentMemory["Saved Incident Memory"]
+    IncidentMemory --> Retrieval
     Workflow --> RuntimeState["Repo-local Runtime State"]
 ```
 
@@ -244,9 +251,21 @@ flowchart LR
     Settings --> Store["Simple Store or Chroma Store"]
     FileTools --> Logs["Configured Log Roots"]
     Loader --> RepoDocs["Configured Doc Roots"]
+    Service --> Brain["Deterministic Root-Cause Engine"]
+    Brain --> Diagnostics["root_cause_diagnostics"]
     Gateway --> Model["Local Model Runtime"]
     Store --> Response["Grounded Incident Response"]
+    Diagnostics --> Response
 ```
+
+### Root-cause brain and memory
+
+The investigation brain has two layers:
+
+- deterministic causal analysis extracts log events, known failure signals, severity, regression deltas, missing evidence, a timeline, and ranked remediation focus
+- model-backed summarization uses that deterministic report as grounded context instead of free-form guessing
+
+The typed response field is `root_cause_diagnostics`. It is returned by `/investigate`, completed `/workflow/*` runs, workflow thread history, and saved incident summaries. Saved incidents include top error lines, next steps, and diagnostics; when `incident_memory_auto_index=true`, SentinelOps upserts that summary into the active knowledge backend so future incidents can retrieve prior fixes.
 
 ### Data and storage flow
 
@@ -262,6 +281,8 @@ flowchart LR
     Storage --> Workflow["workflow checkpoints"]
     Storage --> Audit["audit trail"]
     Storage --> Index["knowledge index / chroma"]
+    Incidents --> Memory["prior incident documents"]
+    Memory --> Index
 ```
 
 More detailed breakdowns live in [docs/architecture.md](docs/architecture.md).
@@ -292,8 +313,8 @@ Safety behavior:
 - Incident library: `/console/incidents`
 - Incident timeline: `/console/timeline`
 - Fast analysis: `POST /analyze`
-- One-shot investigation: `POST /investigate`
-- Workflow investigation: `POST /workflow/investigate`
+- One-shot investigation with deterministic diagnostics: `POST /investigate`
+- Workflow investigation with LangGraph causal analysis and approval gates: `POST /workflow/investigate`
 - Workflow thread history: `GET /workflow/threads`
 - Current user: `/me`
 - Evaluation summary: `/eval/summary`
@@ -315,6 +336,8 @@ Shared-mode requirements:
 - `https://` public base URL
 - OTLP telemetry export
 - managed secrets
+
+Runtime hardening applies in local and shared modes: request bodies are bounded by `max_request_body_bytes`, standard browser security headers are emitted on HTTP responses, API-key and bearer-token checks use constant-time comparison, and SQLite stores enable WAL, foreign keys, and busy timeouts.
 
 Starter company-style Docker stack:
 
@@ -344,6 +367,7 @@ uv run pytest -q
 uv run pytest -q tests/test_console_surface.py
 uv run pytest -q tests/test_runtime_surface.py
 uv run pytest -q tests/test_workflow_api.py
+uv run pytest -q tests/test_root_cause_engine.py
 uv run python scripts/run_eval_summary.py
 uv run python scripts/run_operations_report.py
 ```

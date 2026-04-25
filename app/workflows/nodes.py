@@ -156,6 +156,25 @@ class SentinelWorkflowNodes:
                 "retrieval_status": retrieval_status,
             }
 
+    def causal_analysis_node(self, state: SentinelWorkflowState) -> dict[str, Any]:
+        with start_span("workflow.node.analyze_root_cause"):
+            request = self._request_from_state(state)
+            context = self._context_from_state(state)
+            report = self.investigation_service.root_cause_report(request, context)
+            diagnostics = report.to_diagnostics()
+
+            return {
+                "current_step": "causal_analysis_node",
+                "status": "running",
+                "root_cause_diagnostics": diagnostics.model_dump(mode="json"),
+                "incident_type": report.incident_type,
+                "severity": self._severity_from_brain(
+                    brain_severity=report.severity,
+                    fallback=state.get("severity", "low"),
+                ),
+                "suspected_root_cause": report.root_cause or state.get("suspected_root_cause"),
+            }
+
     def hypothesis_node(self, state: SentinelWorkflowState) -> dict[str, Any]:
         with start_span("workflow.node.draft_hypothesis"):
             request = self._request_from_state(state)
@@ -204,6 +223,11 @@ class SentinelWorkflowNodes:
                 "retrieved_evidence": grounded_response.retrieved_evidence,
                 "source_citations": grounded_response.source_citations,
                 "retrieval_status": grounded_response.retrieval_status,
+                "root_cause_diagnostics": (
+                    grounded_response.root_cause_diagnostics.model_dump(mode="json")
+                    if grounded_response.root_cause_diagnostics is not None
+                    else state.get("root_cause_diagnostics")
+                ),
                 "confidence": grounded_response.confidence,
                 "approval_required": approval_required,
                 "approval_status": approval_status,
@@ -258,14 +282,16 @@ class SentinelWorkflowNodes:
                 retrieval_status=grounded_response.retrieval_status,
                 approval_status=state.get("approval_status", "not_required"),
                 approval_notes=state.get("approval_notes"),
+                root_cause_diagnostics=grounded_response.root_cause_diagnostics,
                 confidence=grounded_response.confidence,
             )
 
             try:
-                self.tool_registry.incident_tools.save_incident(
+                saved_path = self.tool_registry.incident_tools.save_incident(
                     self._request_from_state(state),
                     grounded_response,
                 )
+                self.investigation_service.remember_incident(saved_path)
             except OSError as exc:
                 logger.warning("failed to persist workflow incident summary: %s", exc)
 
@@ -279,6 +305,11 @@ class SentinelWorkflowNodes:
                 "retrieved_evidence": grounded_response.retrieved_evidence,
                 "source_citations": grounded_response.source_citations,
                 "confidence": grounded_response.confidence,
+                "root_cause_diagnostics": (
+                    grounded_response.root_cause_diagnostics.model_dump(mode="json")
+                    if grounded_response.root_cause_diagnostics is not None
+                    else state.get("root_cause_diagnostics")
+                ),
                 "final_report": final_report.model_dump(mode="json"),
             }
 
@@ -477,3 +508,8 @@ class SentinelWorkflowNodes:
         ranking = {"low": 0, "medium": 1, "high": 2, "critical": 3}
         inferred = "high" if top_error_lines else fallback
         return inferred if ranking.get(inferred, 0) >= ranking.get(fallback, 0) else fallback
+
+    @staticmethod
+    def _severity_from_brain(*, brain_severity: str, fallback: str) -> str:
+        ranking = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+        return brain_severity if ranking.get(brain_severity, 0) >= ranking.get(fallback, 0) else fallback

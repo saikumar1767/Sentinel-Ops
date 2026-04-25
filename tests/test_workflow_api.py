@@ -703,6 +703,7 @@ def test_workflow_response_contract_is_consistent_across_states(tmp_path) -> Non
         "tool_results",
         "retrieved_chunks",
         "final_report",
+        "root_cause_diagnostics",
         "errors",
     }
     expected_problem_keys = {"type", "title", "status", "detail", "instance", "code", "thread_id"}
@@ -781,6 +782,8 @@ def test_workflow_response_contract_is_consistent_across_states(tmp_path) -> Non
     assert pending["approval_request"]["proposed_remediation_plan"] == pending["remediation_plan"]
     assert pending["approval_request"]["source_citations"] == pending["source_citations"]
     assert pending["final_report"] is None
+    assert pending["root_cause_diagnostics"]["primary_root_cause"]
+    assert pending["root_cause_diagnostics"]["regression_detected"] is True
 
     assert approved["status"] == "completed"
     assert approved["current_stage"] == "completed"
@@ -797,6 +800,7 @@ def test_workflow_response_contract_is_consistent_across_states(tmp_path) -> Non
     assert approved["final_report"]["source_citations"] == approved["source_citations"]
     assert approved["final_report"]["approval_status"] == approved["approval_status"]
     assert approved["final_report"]["approval_notes"] == approved["approval_notes"]
+    assert approved["final_report"]["root_cause_diagnostics"] == approved["root_cause_diagnostics"]
 
     assert no_approval["status"] == "completed"
     assert no_approval["approval_required"] is False
@@ -805,6 +809,7 @@ def test_workflow_response_contract_is_consistent_across_states(tmp_path) -> Non
     assert no_approval["approval_notes"] is None
     assert no_approval["approval_request"] is None
     assert no_approval["final_report"]["approval_status"] == "not_required"
+    assert no_approval["root_cause_diagnostics"]["signals"]
 
     assert failed["status"] == "failed"
     assert failed["current_stage"] == "failed"
@@ -814,6 +819,7 @@ def test_workflow_response_contract_is_consistent_across_states(tmp_path) -> Non
     assert failed["top_error_lines"]
     assert failed["source_citations"]
     assert failed["retrieved_evidence"]
+    assert failed["root_cause_diagnostics"]["primary_root_cause"]
 
     for payload in (conflict, missing):
         assert set(payload.keys()) == expected_problem_keys

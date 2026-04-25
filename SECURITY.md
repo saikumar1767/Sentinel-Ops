@@ -10,6 +10,8 @@ For one engineer using SentinelOps on one office PC inside their own repositorie
 - `.sentinelops/project.toml` is the repo-local control file
 - `sentinelops pull-models` can bootstrap the reviewed local model set without manual Ollama commands
 - runtime state stays repo-local unless the user configures shared infrastructure
+- saved incident summaries and root-cause diagnostics stay in repo-local runtime storage by default
+- HTTP responses include standard security headers, and request bodies are bounded by `max_request_body_bytes`
 
 This mode is meant to be simple, but it still needs sane secrets hygiene and careful handling of logs and retrieved documents.
 
@@ -32,6 +34,8 @@ When SentinelOps is attached to a repo, it may read:
 - CI workflows
 - local logs
 - generated incident history
+- root-cause diagnostics
+- prior incident memory indexed into the retrieval backend
 
 That makes adoption easier, but it also increases the importance of:
 
@@ -39,6 +43,7 @@ That makes adoption easier, but it also increases the importance of:
 - secrets hygiene
 - model and corpus review
 - auditability
+- retention and redaction rules for saved diagnostics and incident memory
 
 ## Vulnerability Disclosure
 

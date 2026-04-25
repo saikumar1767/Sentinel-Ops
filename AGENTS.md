@@ -7,6 +7,7 @@ SentinelOps is an installable incident and operations copilot product. This repo
 - the FastAPI app and operator console
 - the CLI and repo attachment flow
 - the repo-local single-config contract in `.sentinelops/project.toml`
+- deterministic root-cause diagnostics and incident-memory indexing
 - generated agent/editor integration scaffolding
 - local and production config profiles
 - packaged incident and knowledge fixtures
@@ -38,6 +39,14 @@ SentinelOps is an installable incident and operations copilot product. This repo
 - `docs/` product, rollout, and validation docs
 - `data/` packaged incident and knowledge fixtures
 - `tests/` verification coverage
+
+## Current Brain Contract
+
+- `/investigate` and completed `/workflow/*` responses expose `root_cause_diagnostics`.
+- LangGraph workflow includes an `analyze_root_cause` stage before hypothesis drafting.
+- Saved incidents include top error lines, next steps, and diagnostics.
+- When `incident_memory_auto_index=true`, saved incidents are upserted into the active retrieval backend for future investigations.
+- Runtime hardening includes bounded request bodies, security headers, constant-time token checks, and resilient SQLite defaults.
 
 ## Change Rules
 

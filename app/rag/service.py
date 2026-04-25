@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from itertools import islice
 from time import perf_counter
 
@@ -123,6 +124,29 @@ class KnowledgeBaseService(RetrievalService):
                 duration_ms,
             )
             return result
+
+    def index_incident_summary(self, incident_path: Path) -> int:
+        with start_span("knowledge.index_incident_memory") as span:
+            document = self.loader.load_prior_incident_file(incident_path)
+            chunks = self.chunker.chunk_document(document)
+            embeddings = self.embedding_provider.embed_texts(
+                [chunk.embedding_text for chunk in chunks]
+            )
+            indexed_count = self.store.upsert(chunks=chunks, embeddings=embeddings)
+            self._search_cache.clear()
+            set_span_attributes(
+                span,
+                {
+                    "knowledge.document_type": document.document_type,
+                    "knowledge.chunk_count": indexed_count,
+                },
+            )
+            logger.info(
+                "knowledge_index_incident_memory path=%s chunks=%s",
+                document.source_path,
+                indexed_count,
+            )
+            return indexed_count
 
     def search(
         self,

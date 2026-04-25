@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Protocol
 
 from app.schemas import DocumentType, IncidentType, KnowledgeIngestResponse, RetrievalHit
@@ -67,6 +68,13 @@ class KnowledgeStore(Protocol):
         reset: bool,
     ) -> KnowledgeIngestResponse: ...
 
+    def upsert(
+        self,
+        *,
+        chunks: list[KnowledgeChunk],
+        embeddings: list[list[float]],
+    ) -> int: ...
+
     def count(self) -> int: ...
 
     def query(
@@ -83,6 +91,8 @@ class RetrievalService(Protocol):
     def ensure_index(self) -> None: ...
 
     def rebuild_index(self, *, reset: bool = True) -> object: ...
+
+    def index_incident_summary(self, incident_path: Path) -> int: ...
 
     def search(
         self,

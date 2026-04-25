@@ -49,6 +49,7 @@ WorkflowStage = Literal[
     "classify_incident",
     "gather_evidence",
     "retrieve_supporting_docs",
+    "analyze_root_cause",
     "draft_hypothesis",
     "draft_remediation",
     "awaiting_approval",
@@ -219,6 +220,47 @@ class InvestigateModelResponse(BaseModel):
         return _clean_string_list(value)
 
 
+class RootCauseSignal(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    incident_type: IncidentType
+    severity: Severity
+    weight: float = Field(ge=0.0, le=20.0)
+    evidence: str = Field(min_length=1, max_length=600)
+    source_citation: str = Field(min_length=1, max_length=260)
+
+
+class RootCauseHypothesis(BaseModel):
+    title: str = Field(min_length=1, max_length=180)
+    incident_type: IncidentType
+    root_cause: str = Field(min_length=1, max_length=800)
+    score: float = Field(ge=0.0, le=100.0)
+    supporting_signals: list[str] = Field(default_factory=list, max_length=12)
+    remediation_focus: list[str] = Field(default_factory=list, max_length=5)
+
+    @field_validator("supporting_signals", "remediation_focus")
+    @classmethod
+    def clean_hypothesis_lists(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)
+
+
+class RootCauseDiagnostics(BaseModel):
+    generated_by: Literal["deterministic_root_cause_engine"] = "deterministic_root_cause_engine"
+    incident_type: IncidentType
+    severity: Severity
+    evidence_strength: float = Field(ge=0.0, le=1.0)
+    regression_detected: bool = False
+    primary_root_cause: str | None = Field(default=None, max_length=800)
+    hypotheses: list[RootCauseHypothesis] = Field(default_factory=list, max_length=3)
+    signals: list[RootCauseSignal] = Field(default_factory=list, max_length=12)
+    timeline: list[str] = Field(default_factory=list, max_length=8)
+    missing_evidence: list[str] = Field(default_factory=list, max_length=8)
+
+    @field_validator("timeline", "missing_evidence")
+    @classmethod
+    def clean_diagnostic_lists(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)
+
+
 class InvestigateResponse(InvestigateModelResponse):
     model_config = ConfigDict(
         json_schema_extra={
@@ -254,6 +296,7 @@ class InvestigateResponse(InvestigateModelResponse):
     next_steps: list[str] = Field(min_length=1, max_length=5)
     source_citations: list[str] = Field(min_length=1, max_length=8)
     retrieval_status: RetrievalStatus = "not_used"
+    root_cause_diagnostics: RootCauseDiagnostics | None = None
 
 
 class WorkflowInvestigateRequest(InvestigateRequest):
@@ -467,6 +510,7 @@ class WorkflowFinalReport(BaseModel):
     retrieval_status: RetrievalStatus = "not_used"
     approval_status: ApprovalStatus = "not_required"
     approval_notes: str | None = None
+    root_cause_diagnostics: RootCauseDiagnostics | None = None
     confidence: float = Field(ge=0.0, le=1.0)
 
     @field_validator(
@@ -621,6 +665,10 @@ class WorkflowThreadResponse(BaseModel):
     final_report: WorkflowFinalReport | None = Field(
         default=None,
         description="Final workflow report returned when the thread completes.",
+    )
+    root_cause_diagnostics: RootCauseDiagnostics | None = Field(
+        default=None,
+        description="Deterministic causal analysis extracted from tool evidence and retrieval context.",
     )
     errors: list[str] = Field(
         default_factory=list,
@@ -781,9 +829,17 @@ class SavedIncidentSummary(BaseModel):
     severity: Severity
     manager_summary: str
     suspected_root_cause: str
+    top_error_lines: list[str] = Field(default_factory=list, max_length=5)
+    next_steps: list[str] = Field(default_factory=list, max_length=5)
     source_citations: list[str] = Field(default_factory=list)
     retrieval_status: RetrievalStatus = "not_used"
+    root_cause_diagnostics: RootCauseDiagnostics | None = None
     confidence: float = Field(ge=0.0, le=1.0)
+
+    @field_validator("top_error_lines", "next_steps", "source_citations")
+    @classmethod
+    def clean_saved_incident_lists(cls, value: list[str]) -> list[str]:
+        return _clean_string_list(value)
 
 
 class ConsoleTimelineEntry(BaseModel):

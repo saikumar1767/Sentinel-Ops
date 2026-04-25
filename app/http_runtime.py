@@ -10,12 +10,19 @@ from fastapi import FastAPI, Request
 from fastapi.openapi.utils import get_openapi
 
 from app.dependencies import get_runtime_metrics, get_settings
+from app.http_errors import problem_response
+from app.settings import Settings
 
 logger = logging.getLogger("sentinelops.http")
 _WORKFLOW_THREAD_PATH_RE = re.compile(
     r"^/workflow/(?P<thread_id>[^/]+)(?P<suffix>(?:/(?:approve|reject|resume|audit))?)$"
 )
 _PUBLIC_OPENAPI_PATHS = {"/health", "/ready", "/ready/strict"}
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+}
 
 
 def configure_logging() -> None:
@@ -34,12 +41,34 @@ def install_http_middleware(app: FastAPI) -> None:
     @app.middleware("http")
     async def production_runtime_middleware(request: Request, call_next):
         metrics = get_runtime_metrics()
+        settings = get_settings()
         request_id = request.headers.get("X-Request-ID") or uuid4().hex
         request.state.request_id = request_id
         normalized_path = _normalize_metrics_path(request.url.path)
         start = perf_counter()
 
-        response = await call_next(request)
+        try:
+            response = _request_size_problem_response(request, settings)
+            if response is None:
+                response = await call_next(request)
+        except Exception:
+            duration_ms = (perf_counter() - start) * 1000
+            metrics.record_request(
+                method=request.method,
+                path=normalized_path,
+                status_code=500,
+                duration_ms=duration_ms,
+            )
+            _log_request(
+                request_id=request_id,
+                method=request.method,
+                path=normalized_path,
+                status_code=500,
+                duration_ms=duration_ms,
+                user_subject=getattr(getattr(request.state, "current_user", None), "subject", None),
+            )
+            raise
+
         duration_ms = (perf_counter() - start) * 1000
         metrics.record_request(
             method=request.method,
@@ -55,8 +84,7 @@ def install_http_middleware(app: FastAPI) -> None:
             duration_ms=duration_ms,
             user_subject=getattr(getattr(request.state, "current_user", None), "subject", None),
         )
-        response.headers.setdefault("X-Request-ID", request_id)
-        response.headers["X-Process-Time-Ms"] = f"{duration_ms:.3f}"
+        _apply_standard_response_headers(response, request_id=request_id, duration_ms=duration_ms)
         return response
 
 
@@ -150,6 +178,44 @@ def _normalize_metrics_path(path: str) -> str:
 
     suffix = match.group("suffix") or ""
     return f"/workflow/{{thread_id}}{suffix}"
+
+
+def _request_size_problem_response(request: Request, settings: Settings):
+    raw_content_length = request.headers.get("content-length")
+    if raw_content_length is None:
+        return None
+
+    try:
+        content_length = int(raw_content_length)
+    except ValueError:
+        return problem_response(
+            request=request,
+            status_code=400,
+            code="invalid_content_length",
+            title="Invalid request",
+            detail="Content-Length must be a valid integer.",
+        )
+
+    if content_length <= settings.max_request_body_bytes:
+        return None
+
+    return problem_response(
+        request=request,
+        status_code=413,
+        code="request_body_too_large",
+        title="Request body too large",
+        detail=(
+            "Request body exceeds the configured SentinelOps limit of "
+            f"{settings.max_request_body_bytes} bytes."
+        ),
+    )
+
+
+def _apply_standard_response_headers(response, *, request_id: str, duration_ms: float) -> None:
+    response.headers.setdefault("X-Request-ID", request_id)
+    response.headers["X-Process-Time-Ms"] = f"{duration_ms:.3f}"
+    for header, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(header, value)
 
 
 def _log_request(

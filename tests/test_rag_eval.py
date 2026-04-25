@@ -8,6 +8,7 @@ from app.evaluation import load_rag_eval_cases, score_rag_search_results
 from app.main import app
 from app.rag.chunker import MarkdownChunker
 from app.rag.loader import KnowledgeDocumentLoader
+from app.rag.models import KnowledgeChunk
 from app.rag.service import KnowledgeBaseService
 from app.rag.simple_store import SimpleKnowledgeStore
 from app.settings import PROJECT_ROOT, Settings
@@ -103,6 +104,46 @@ def test_knowledge_ingest_indexes_local_docs(indexed_knowledge_service) -> None:
     assert ingest_result.source_counts["runbook"] >= 5
     assert ingest_result.chunk_counts["incident_template"] >= ingest_result.source_counts["incident_template"]
     assert ingest_result.chunk_counts["runbook"] >= ingest_result.source_counts["runbook"]
+
+
+def test_simple_knowledge_store_rebuild_uses_valid_atomic_index(tmp_path) -> None:
+    settings = Settings(
+        knowledge_index_path=tmp_path / "knowledge-index.json",
+        knowledge_store_backend="simple",
+    )
+    store = SimpleKnowledgeStore(settings)
+    chunk = KnowledgeChunk(
+        chunk_id="chunk-database-1",
+        document_id="doc-database",
+        source_path="runbooks/database.md",
+        document_type="runbook",
+        title="Database",
+        content="Database timeout incidents include connection pool exhaustion.",
+        embedding_text="Database timeout incidents include connection pool exhaustion.",
+        citation="runbooks/database.md#Database",
+        incident_type="database",
+        chunk_index=0,
+    )
+
+    result = store.rebuild(chunks=[chunk], embeddings=[[0.1, 0.9]], reset=True)
+
+    assert result.chunk_count == 1
+    assert store.count() == 1
+    assert not [path for path in tmp_path.iterdir() if path.suffix == ".tmp"]
+
+
+def test_simple_knowledge_store_reports_corrupt_index(tmp_path) -> None:
+    index_path = tmp_path / "knowledge-index.json"
+    index_path.write_text("{not-json", encoding="utf-8")
+    store = SimpleKnowledgeStore(
+        Settings(
+            knowledge_index_path=index_path,
+            knowledge_store_backend="simple",
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="not valid JSON"):
+        store.count()
 
 
 @pytest.mark.parametrize("case", RAG_CASES, ids=[case.id for case in RAG_CASES])
