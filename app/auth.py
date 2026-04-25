@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from hmac import compare_digest
 from typing import Any, Iterable, Literal
 
 from fastapi import HTTPException, Request, status
@@ -49,7 +50,7 @@ class AuthenticationService:
     def _authenticate_api_key(self, request: Request) -> AuthenticatedUser:
         configured_api_key = self.settings.auth_api_key
         provided_api_key = request.headers.get(self.settings.auth_api_key_header_name)
-        if configured_api_key and provided_api_key == configured_api_key:
+        if _constant_time_match(provided_api_key, configured_api_key):
             return AuthenticatedUser(
                 subject="api-key-user",
                 name="API Key User",
@@ -59,7 +60,7 @@ class AuthenticationService:
 
         token = _extract_bearer_token(request)
         if token:
-            profile = self.settings.auth_bearer_tokens.get(token)
+            profile = _profile_for_bearer_token(token, self.settings.auth_bearer_tokens)
             if profile is not None:
                 return _user_from_profile(profile, auth_mode="api_key")
 
@@ -137,6 +138,22 @@ def _optional_string(value: object) -> str | None:
         return None
     cleaned = str(value).strip()
     return cleaned or None
+
+
+def _constant_time_match(provided: str | None, configured: str | None) -> bool:
+    if not provided or not configured:
+        return False
+    return compare_digest(provided.encode("utf-8"), configured.encode("utf-8"))
+
+
+def _profile_for_bearer_token(
+    provided_token: str,
+    configured_tokens: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    for configured_token, profile in configured_tokens.items():
+        if _constant_time_match(provided_token, configured_token):
+            return profile
+    return None
 
 
 def _user_from_profile(profile: dict[str, Any], *, auth_mode: Literal["api_key", "oidc"]) -> AuthenticatedUser:

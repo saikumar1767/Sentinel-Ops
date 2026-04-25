@@ -36,6 +36,7 @@ class SentinelWorkflowState(TypedDict, total=False):
 
     retrieved_chunks: list[dict[str, Any]]
     retrieval_status: RetrievalStatus
+    root_cause_diagnostics: dict[str, Any]
     draft_model_response: dict[str, Any]
     grounded_response: dict[str, Any]
 

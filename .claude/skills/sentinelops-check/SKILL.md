@@ -14,6 +14,7 @@ allowed-tools: Bash Read Grep Glob
    - project manifest path
    - configured doc roots and log roots
    - active models and retrieval backend
+   - whether incident-memory indexing is enabled if config output exposes it
    - anything missing or degraded
 
 If Ollama is reachable but models are missing, tell the user to run `/sentinelops-pull-models`.

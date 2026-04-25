@@ -83,8 +83,11 @@ class IncidentTools:
             severity=response.severity,
             manager_summary=response.manager_summary,
             suspected_root_cause=response.suspected_root_cause,
+            top_error_lines=response.top_error_lines,
+            next_steps=response.next_steps,
             source_citations=response.source_citations,
             retrieval_status=response.retrieval_status,
+            root_cause_diagnostics=response.root_cause_diagnostics,
             confidence=response.confidence,
         )
 

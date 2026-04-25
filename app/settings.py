@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     workspace_doc_roots: list[str] = Field(default_factory=lambda: list(DEFAULT_WORKSPACE_DOC_ROOTS))
     log_level: Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"] = "INFO"
     startup_validate_config: bool = True
+    max_request_body_bytes: int = Field(default=1_048_576, ge=1024, le=10_485_760)
     telemetry_enabled: bool = False
     telemetry_service_name: str = "sentinelops-api"
     telemetry_exporter: Literal["none", "console", "otlp"] = "none"
@@ -130,6 +131,7 @@ class Settings(BaseSettings):
     retrieval_cache_ttl_seconds: int = Field(default=900, ge=0, le=86400)
     retrieval_cache_max_entries: int = Field(default=256, ge=1, le=4096)
     console_timeline_limit: int = Field(default=12, ge=4, le=40)
+    incident_memory_auto_index: bool = True
 
     max_recent_candidate_logs: int = Field(default=5, ge=1, le=20)
     tool_max_iterations: int = Field(default=4, ge=1, le=8)

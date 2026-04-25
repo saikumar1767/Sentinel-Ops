@@ -11,6 +11,7 @@ A viewer should understand:
 - what SentinelOps does
 - how repo-local installation works
 - why the incident workflow is technically credible
+- how root-cause diagnostics and incident memory make the "brain" inspectable
 - what proof exists that it works
 
 ## Shot List
@@ -24,7 +25,7 @@ Screen:
 
 Narration:
 
-> SentinelOps is a plug-and-play incident and operations copilot. You can run it as a local console or attach it directly to an engineering repo so it understands that project's logs, runbooks, and deploy context.
+> SentinelOps is a plug-and-play incident and operations copilot. You can run it as a local console or attach it directly to an engineering repo so it understands that project's logs, runbooks, deploy context, and prior incidents.
 
 ### Shot 2: Repo-local setup
 
@@ -58,11 +59,12 @@ Screen:
 
 - select `Database Pool Exhaustion Workflow`
 - run it
+- show `root_cause_diagnostics`
 - show approval pause
 
 Narration:
 
-> The workflow gathers safe evidence, retrieves supporting documentation, drafts a remediation plan, and pauses before sensitive action completes.
+> The workflow gathers safe evidence, retrieves supporting documentation, runs deterministic causal analysis, drafts a remediation plan, and pauses before sensitive action completes.
 
 ### Shot 5: Approval and timeline
 
@@ -70,11 +72,12 @@ Screen:
 
 - approve the workflow
 - show final report and citations
+- show causal timeline or evidence strength
 - show timeline update
 
 Narration:
 
-> That creates both a structured report and a durable incident history for later review.
+> That creates a structured report, a durable incident history, and searchable incident memory for later review.
 
 ### Shot 6: One-shot investigation
 

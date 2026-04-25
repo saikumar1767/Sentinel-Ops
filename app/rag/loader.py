@@ -125,23 +125,24 @@ class KnowledgeDocumentLoader:
     def _load_prior_incidents(self) -> list[KnowledgeDocument]:
         documents: list[KnowledgeDocument] = []
         for path in sorted(self.settings.incident_history_dir.glob("*.json")):
-            relative_path = self.settings.workspace_relative_path(path)
-            payload = json.loads(path.read_text(encoding="utf-8-sig"))
-            incident_type = self._coerce_incident_type(payload.get("incident_type"))
-            title = f"{str(payload.get('incident_type', 'incident')).replace('-', ' ').title()} prior incident"
-            content = self._render_prior_incident_markdown(payload)
-            documents.append(
-                KnowledgeDocument(
-                    document_id=self._document_id(relative_path),
-                    source_path=relative_path,
-                    document_type="prior_incident",
-                    title=title,
-                    content=content,
-                    incident_type=incident_type,
-                    tags=self._parse_tags(payload.get("source_citations")),
-                )
-            )
+            documents.append(self.load_prior_incident_file(path))
         return documents
+
+    def load_prior_incident_file(self, path: Path) -> KnowledgeDocument:
+        relative_path = self.settings.workspace_relative_path(path)
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        incident_type = self._coerce_incident_type(payload.get("incident_type"))
+        title = f"{str(payload.get('incident_type', 'incident')).replace('-', ' ').title()} prior incident"
+        content = self._render_prior_incident_markdown(payload)
+        return KnowledgeDocument(
+            document_id=self._document_id(relative_path),
+            source_path=relative_path,
+            document_type="prior_incident",
+            title=title,
+            content=content,
+            incident_type=incident_type,
+            tags=self._parse_tags(payload.get("source_citations")),
+        )
 
     def _render_prior_incident_markdown(self, payload: dict[str, object]) -> str:
         citations = payload.get("source_citations") or []
@@ -150,6 +151,16 @@ class KnowledgeDocumentLoader:
         candidate_lines = "\n".join(
             f"- {item}" for item in candidate_paths if isinstance(item, str)
         ) or "- None"
+        top_error_lines = payload.get("top_error_lines") or []
+        top_error_block = "\n".join(
+            f"- {item}" for item in top_error_lines if isinstance(item, str)
+        ) or "- None"
+        next_steps = payload.get("next_steps") or []
+        next_steps_block = "\n".join(
+            f"- {item}" for item in next_steps if isinstance(item, str)
+        ) or "- None"
+        diagnostics = payload.get("root_cause_diagnostics")
+        diagnostic_block = self._render_root_cause_diagnostics(diagnostics)
 
         return f"""
 # Prior Incident Summary
@@ -169,12 +180,45 @@ class KnowledgeDocumentLoader:
 ## Suspected Root Cause
 {payload.get("suspected_root_cause", "No root cause available")}
 
+## Top Error Lines
+{top_error_block}
+
+## Next Steps
+{next_steps_block}
+
+## Root Cause Diagnostics
+{diagnostic_block}
+
 ## Candidate Logs
 {candidate_lines}
 
 ## Source Citations
 {citation_lines}
 """.strip()
+
+    @staticmethod
+    def _render_root_cause_diagnostics(value: object) -> str:
+        if not isinstance(value, dict):
+            return "No structured diagnostics captured."
+
+        lines = [
+            f"- Primary root cause: {value.get('primary_root_cause') or 'unknown'}",
+            f"- Evidence strength: {value.get('evidence_strength', 'unknown')}",
+            f"- Regression detected: {value.get('regression_detected', False)}",
+        ]
+        timeline = value.get("timeline")
+        if isinstance(timeline, list) and timeline:
+            lines.append("- Timeline:")
+            lines.extend(f"  - {item}" for item in timeline[:5] if isinstance(item, str))
+        signals = value.get("signals")
+        if isinstance(signals, list) and signals:
+            lines.append("- Signals:")
+            for signal in signals[:5]:
+                if isinstance(signal, dict):
+                    lines.append(
+                        f"  - {signal.get('name', 'signal')}: {signal.get('evidence', '')}"
+                    )
+        return "\n".join(lines)
 
     def _document_type_for_path(self, path: Path) -> DocumentType:
         for segment in path.parts:

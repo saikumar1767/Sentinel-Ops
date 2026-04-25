@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 import re
 from time import perf_counter
 
@@ -34,6 +35,7 @@ from app.schemas import (
     RetrievalHit,
     RetrievalStatus,
 )
+from app.services.root_cause_engine import RootCauseEngine, RootCauseReport
 from app.settings import Settings
 from app.telemetry import set_span_attributes, start_span
 from app.tools.tool_registry import ToolExecutionRecord, ToolRegistry
@@ -222,6 +224,7 @@ class InvestigationService:
         self.gateway = gateway
         self.tool_registry = tool_registry
         self.retriever = retriever
+        self.root_cause_engine = RootCauseEngine()
 
     def investigate(self, request: InvestigateRequest) -> InvestigateResponse:
         with start_span(
@@ -250,7 +253,8 @@ class InvestigationService:
 
             grounded_response = self._ground_response(request, model_response, context)
             try:
-                self.tool_registry.incident_tools.save_incident(request, grounded_response)
+                saved_path = self.tool_registry.incident_tools.save_incident(request, grounded_response)
+                self.remember_incident(saved_path)
             except OSError as exc:
                 logger.warning("failed to persist incident summary: %s", exc)
             set_span_attributes(
@@ -262,6 +266,32 @@ class InvestigationService:
                 },
             )
             return grounded_response
+
+    def remember_incident(self, incident_path: Path) -> bool:
+        if not self.settings.incident_memory_auto_index:
+            return False
+
+        indexer = getattr(self.retriever, "index_incident_summary", None)
+        if not callable(indexer):
+            return False
+
+        try:
+            indexer(incident_path)
+            return True
+        except Exception as exc:
+            logger.warning("failed to index incident memory %s: %s", incident_path, exc)
+            return False
+
+    def root_cause_report(
+        self,
+        request: InvestigateRequest,
+        context: InvestigationContext,
+    ) -> RootCauseReport:
+        return self.root_cause_engine.analyze(
+            request=request,
+            records=context.all_records,
+            retrieval_hits=context.retrieval_hits,
+        )
 
     def _resolve_candidate_log_paths(self, request: InvestigateRequest) -> list[str]:
         if request.candidate_log_paths:
@@ -383,6 +413,8 @@ class InvestigationService:
         ):
             records = context.all_records
             evidence_summary = self._build_evidence_summary(records)
+            brain_report = self.root_cause_report(request, context)
+            evidence_summary = f"{evidence_summary}\n\nDeterministic root-cause analysis:\n{brain_report.prompt_summary()}"
             retrieval_summary = format_retrieval_hits_for_prompt(context.retrieval_hits)
             evidence_citations = dedupe_preserve_order(
                 [
@@ -512,6 +544,7 @@ class InvestigationService:
         context: InvestigationContext,
     ) -> InvestigateResponse:
         records = context.all_records
+        brain_report = self.root_cause_report(request, context)
         fallback_error_lines = dedupe_preserve_order(self._collect_top_error_lines(records))
         tool_citations = dedupe_preserve_order(self._collect_evidence_citations(records))
         retrieval_hit_citations = retrieval_citations(context.retrieval_hits)
@@ -521,7 +554,7 @@ class InvestigationService:
         if not top_error_lines:
             top_error_lines = ["No concrete error lines were captured from the available evidence."]
 
-        next_steps = self._ground_next_steps(model_response, records)
+        next_steps = self._ground_next_steps(model_response, records, brain_report)
         source_citations, selected_retrieval_citations = self._ground_source_citations(
             model_response,
             allowed_citations,
@@ -555,6 +588,7 @@ class InvestigationService:
                 model_response.suspected_root_cause,
                 top_error_lines,
                 records,
+                brain_report,
             ),
             next_steps=next_steps[:5],
             manager_summary=self._ground_manager_summary(
@@ -562,10 +596,12 @@ class InvestigationService:
                 model_response.incident_type,
                 top_error_lines,
                 records,
+                brain_report,
             ),
             retrieved_evidence=retrieved_evidence[:5],
             source_citations=source_citations[:8],
             retrieval_status=context.retrieval_status,
+            root_cause_diagnostics=brain_report.to_diagnostics(),
             confidence=confidence,
         )
 
@@ -599,8 +635,10 @@ class InvestigationService:
         self,
         model_response: InvestigateModelResponse,
         records: list[ToolExecutionRecord],
+        brain_report: RootCauseReport,
     ) -> list[str]:
         template_steps = self._template_steps(records)
+        brain_steps = brain_report.next_steps
         model_steps = [
             step
             for step in model_response.next_steps
@@ -610,7 +648,7 @@ class InvestigationService:
             grounded_steps = dedupe_preserve_order(model_steps)
             if not _has_action_or_mitigation_step(grounded_steps):
                 mitigation_steps = [
-                    step for step in template_steps if _has_action_or_mitigation_step([step])
+                    step for step in [*brain_steps, *template_steps] if _has_action_or_mitigation_step([step])
                 ]
                 grounded_steps.extend(
                     step for step in mitigation_steps if step not in grounded_steps
@@ -618,8 +656,13 @@ class InvestigationService:
             return grounded_steps[:5]
 
         grounded_steps = dedupe_preserve_order(template_steps)
+        if grounded_steps and not _has_action_or_mitigation_step(grounded_steps):
+            grounded_steps.extend(step for step in brain_steps if step not in grounded_steps)
         if grounded_steps:
             return grounded_steps[:5]
+
+        if brain_steps:
+            return brain_steps[:5]
 
         return list(GENERIC_NEXT_STEPS)
 
@@ -721,6 +764,7 @@ class InvestigationService:
         suspected_root_cause: str,
         top_error_lines: list[str],
         records: list[ToolExecutionRecord],
+        brain_report: RootCauseReport,
     ) -> str:
         cleaned_root_cause = suspected_root_cause.strip().rstrip(".")
         humanized_lines = [_humanize_evidence_line(line) for line in top_error_lines if line.strip()]
@@ -729,7 +773,7 @@ class InvestigationService:
             compare_record.payload.get("new_error_lines") or compare_record.payload.get("missing_success_lines")
         )
 
-        synthesized = self._synthesize_root_cause_from_evidence(humanized_lines)
+        synthesized = brain_report.root_cause or self._synthesize_root_cause_from_evidence(humanized_lines)
         if synthesized:
             cleaned_root_cause = synthesized
         else:
@@ -752,6 +796,7 @@ class InvestigationService:
         incident_type: str,
         top_error_lines: list[str],
         records: list[ToolExecutionRecord],
+        brain_report: RootCauseReport,
     ) -> str:
         cleaned_summary = manager_summary.strip().rstrip(".")
         clauses = _focus_error_clauses(top_error_lines)

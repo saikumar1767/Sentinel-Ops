@@ -7,6 +7,7 @@ This repository contains:
 - the FastAPI API and operator console
 - the CLI and repo attachment flow
 - the single repo-local config contract in `.sentinelops/project.toml`
+- deterministic root-cause diagnostics and incident-memory indexing
 - generated agent and editor integrations
 - local and production config profiles
 - live validation and rollout docs
@@ -23,6 +24,13 @@ The main path is:
 6. run `sentinelops`
 
 Local-first personal mode is the default product. Shared auth and centralized deployment are optional overlays.
+
+## Current Brain Contract
+
+- `/investigate` and completed `/workflow/*` responses include typed `root_cause_diagnostics`.
+- The LangGraph workflow runs causal analysis before hypothesis drafting and keeps approval pauses for sensitive remediation.
+- Saved incidents include top error lines, next steps, and diagnostics, then become retrieval memory when `incident_memory_auto_index=true`.
+- The API shell now enforces bounded request bodies, emits security headers, uses constant-time token checks, and configures SQLite for WAL, foreign keys, and busy timeouts.
 
 ## Important Files
 
@@ -54,5 +62,6 @@ Local-first personal mode is the default product. Shared auth and centralized de
 
 - Keep CLI, bootstrap, runtime, and generated agent integrations aligned.
 - Treat `.sentinelops/project.toml` as the single repo-local control contract when changing attach/runtime behavior.
+- Keep docs and generated instructions aligned with the root-cause diagnostics and incident-memory contract.
 - If install, runtime, validation, or agent integration behavior changes, update README, validation docs, and the root agent files in the same change.
 - Keep the local-first story primary. Do not accidentally make shared-enterprise assumptions the default path.

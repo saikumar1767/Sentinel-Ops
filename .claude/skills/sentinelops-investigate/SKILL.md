@@ -17,5 +17,7 @@ When the user asks about incidents, logs, readiness, deployment failures, or run
    - repo logs
    - repo runbooks
    - SentinelOps analyze, investigate, knowledge, and workflow routes when available
+   - `root_cause_diagnostics` when the API returns it
+   - saved incident memory when a similar prior incident exists
 
 Do not claim features are ready if `sentinelops doctor` says otherwise.

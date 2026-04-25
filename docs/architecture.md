@@ -9,6 +9,8 @@ The primary design choice is:
 - local-first by default
 - one repo-local control file
 - safe file and workflow boundaries
+- deterministic root-cause analysis before model summarization
+- incident memory that feeds future retrieval
 - optional shared mode only when a team truly needs it
 
 ## Operating Modes
@@ -45,12 +47,16 @@ flowchart LR
     Investigate --> Logs
     Workflow --> Docs
     Workflow --> Logs
+    Investigate --> Brain["Root-Cause Engine"]
+    Workflow --> Brain
     Analyze --> Ollama["Ollama"]
     Investigate --> Ollama
     Workflow --> Ollama
     Analyze --> Retrieval["Simple Index or Chroma"]
     Investigate --> Retrieval
     Workflow --> Retrieval
+    Brain --> IncidentMemory["Saved Incident Memory"]
+    IncidentMemory --> Retrieval
     Workflow --> RuntimeState["Repo-local Runtime State"]
 ```
 
@@ -139,11 +145,16 @@ flowchart LR
     Router --> InvestigateService["Investigation Service"]
     InvestigateService --> FileTools["Safe File Tools"]
     InvestigateService --> Retrieval["Knowledge Loader + Store"]
+    InvestigateService --> Brain["Root-Cause Engine"]
     InvestigateService --> Ollama["Ollama Gateway"]
     FileTools --> Logs["Configured Log Roots"]
     Retrieval --> RepoDocs["Configured Doc Roots"]
+    Brain --> Diagnostics["root_cause_diagnostics"]
     Ollama --> Response["Grounded Investigation Response"]
+    Diagnostics --> Response
 ```
+
+The one-shot route reads configured log evidence, compares supplied runs when possible, retrieves runbooks and prior incident memory, runs deterministic causal analysis, and then asks the model to summarize with that evidence already structured.
 
 ### 3. Workflow path
 
@@ -156,12 +167,28 @@ flowchart LR
     WorkflowService --> Graph["LangGraph"]
     Graph --> FileTools["Safe File Tools"]
     Graph --> Retrieval["Knowledge Loader + Store"]
+    Graph --> Brain["Root-Cause Engine"]
     Graph --> Ollama["Ollama Gateway"]
     WorkflowService --> Checkpoints["Checkpoint Store"]
     WorkflowService --> Audit["Audit Trail"]
     WorkflowService --> ThreadStore["Thread Metadata Store"]
     Graph --> Response["Workflow Snapshot / Approval State"]
 ```
+
+The LangGraph route has an explicit `analyze_root_cause` stage between retrieval and hypothesis drafting. That stage stores deterministic diagnostics in workflow state so the final report, saved incident, audit-visible thread state, and thread history all carry the same causal record.
+
+### Root-cause diagnostics contract
+
+`root_cause_diagnostics` is intentionally typed and inspectable. It contains:
+
+- `generated_by`, currently `deterministic_root_cause_engine`
+- inferred incident type and severity
+- evidence strength from extracted signals, regression deltas, and timeline density
+- primary root cause and ranked hypotheses
+- normalized evidence signals with source citations
+- timeline entries and missing-evidence notes
+
+This keeps the "brain" of SentinelOps split cleanly: deterministic code extracts and scores operational facts, while the model turns those facts into readable operator language.
 
 ## Data and Storage Architecture
 
@@ -184,6 +211,8 @@ flowchart LR
     Storage --> Workflow["workflow checkpoints"]
     Storage --> Audit["audit DB"]
     Storage --> Index["knowledge index / chroma"]
+    Incidents --> Memory["prior incident memory documents"]
+    Memory --> Index
 ```
 
 ### Packaged data versus attached project data
@@ -195,6 +224,7 @@ flowchart LR
 | `data/reference_incidents/` | packaged examples for comparison and evaluation |
 | attached repo doc roots | project-specific operational context |
 | attached repo log roots | project-specific live or recent evidence |
+| saved incident summaries | repo-local incident memory that can be upserted into retrieval |
 
 ## Agent and Editor Integration Architecture
 
@@ -253,11 +283,23 @@ The easiest real use case is one engineer attaching SentinelOps to one repo on o
 
 SentinelOps favors configured repo docs, known deploy files, and safe log roots over broad filesystem scanning or generic guesswork.
 
-### 4. Workflow stays inspectable
+### 4. Causal analysis is deterministic before it is conversational
+
+Root-cause detection is not left entirely to a prompt. SentinelOps extracts known failure signals, compares before/after log evidence, records missing evidence, and emits typed diagnostics that the model must stay grounded in.
+
+### 5. Workflow stays inspectable
 
 Durable workflow state, approval pauses, and auditability matter more than pretending the product is fully autonomous.
 
-### 5. Shared mode is an overlay
+### 6. Incident memory is repo-local by default
+
+Completed investigations are saved under repo-local runtime storage and can be indexed into the active knowledge backend. This makes repeat incidents faster to recognize without creating a hidden global memory.
+
+### 7. Runtime hardening belongs in the product shell
+
+The API adds bounded request bodies, security headers, constant-time token comparisons, SQLite WAL, foreign keys, and busy timeouts so local-first does not mean careless runtime behavior.
+
+### 8. Shared mode is an overlay
 
 OIDC, shared Postgres, and telemetry remain supported, but only for deployments that actually need them.
 
@@ -269,6 +311,7 @@ For the local-first product:
 - background workers for long-running jobs
 - more built-in integrations for real project systems
 - stronger policy-gated action execution
+- broader incident-signal libraries for domain-specific services
 
 For the shared overlay:
 

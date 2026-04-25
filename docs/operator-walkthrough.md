@@ -34,6 +34,10 @@ Say:
 
 > SentinelOps is a plug-and-play incident and operations copilot. It can run as a standalone operator console, attach directly to a repo, and use logs, runbooks, deployment files, and approval-aware workflows to produce grounded incident responses.
 
+Optional deeper framing:
+
+> The important upgrade is that SentinelOps now separates evidence thinking from model wording. It extracts deterministic root-cause diagnostics first, then uses the model to explain the result.
+
 ### 2. Show the repo-local shape
 
 Point to:
@@ -71,14 +75,17 @@ Show:
 - expected outcome
 - workflow result
 - evidence panel
+- root-cause diagnostics
 - approval pause
 
 Approve it and point out:
 
 - final report
 - citations
+- causal timeline and evidence strength
 - timeline refresh
 - thread history
+- saved incident memory for future retrieval
 
 ### 5. Run a fast investigation
 
@@ -89,6 +96,7 @@ Show:
 - one-shot `/investigate`
 - grounded citations
 - concise summary
+- `root_cause_diagnostics` with signals, missing evidence, and regression detection
 
 ### 6. Show resilience
 

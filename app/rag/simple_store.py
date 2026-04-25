@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import tempfile
 from collections import Counter
+from pathlib import Path
 from typing import Any
 
 from app.rag.models import KnowledgeChunk
@@ -29,9 +32,6 @@ class SimpleKnowledgeStore:
         if len(chunks) != len(embeddings):
             raise ValueError("Chunk and embedding counts must match.")
 
-        if reset and self.index_path.exists():
-            self.index_path.unlink()
-
         self.index_path.parent.mkdir(parents=True, exist_ok=True)
         records = [
             {
@@ -46,7 +46,7 @@ class SimpleKnowledgeStore:
             "collection_name": self.collection_name,
             "records": records,
         }
-        self.index_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        self._write_index_payload(payload)
 
         source_counts = Counter()
         seen_documents: dict[str, str] = {}
@@ -65,6 +65,46 @@ class SimpleKnowledgeStore:
             chunk_counts=dict(chunk_counts),
             status="indexed",
         )
+
+    def upsert(
+        self,
+        *,
+        chunks: list[KnowledgeChunk],
+        embeddings: list[list[float]],
+    ) -> int:
+        if len(chunks) != len(embeddings):
+            raise ValueError("Chunk and embedding counts must match.")
+        if not chunks:
+            return 0
+
+        payload = self._load_payload()
+        records = list(payload.get("records", []))
+        document_ids = {chunk.document_id for chunk in chunks}
+        retained_records = [
+            record
+            for record in records
+            if not (
+                isinstance(record, dict)
+                and isinstance(record.get("metadata"), dict)
+                and record["metadata"].get("document_id") in document_ids
+            )
+        ]
+        retained_records.extend(
+            {
+                "chunk_id": chunk.chunk_id,
+                "document": chunk.content,
+                "embedding": embedding,
+                "metadata": chunk.to_metadata(),
+            }
+            for chunk, embedding in zip(chunks, embeddings, strict=True)
+        )
+        self._write_index_payload(
+            {
+                "collection_name": self.collection_name,
+                "records": retained_records,
+            }
+        )
+        return len(chunks)
 
     def count(self) -> int:
         return len(self._load_records())
@@ -108,10 +148,66 @@ class SimpleKnowledgeStore:
         return hits
 
     def _load_records(self) -> list[dict[str, Any]]:
+        return list(self._load_payload().get("records", []))
+
+    def _load_payload(self) -> dict[str, Any]:
         if not self.index_path.is_file():
-            return []
-        payload = json.loads(self.index_path.read_text(encoding="utf-8-sig"))
-        return list(payload.get("records", []))
+            return {
+                "collection_name": self.collection_name,
+                "records": [],
+            }
+        try:
+            payload = json.loads(self.index_path.read_text(encoding="utf-8-sig"))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Knowledge index at {self.index_path} is not valid JSON. Rebuild the index before searching."
+            ) from exc
+
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"Knowledge index at {self.index_path} must contain a JSON object.")
+
+        records = payload.get("records", [])
+        if not isinstance(records, list):
+            raise RuntimeError(f"Knowledge index at {self.index_path} must contain a records list.")
+
+        validated_records: list[dict[str, Any]] = []
+        for index, record in enumerate(records):
+            if not isinstance(record, dict):
+                raise RuntimeError(f"Knowledge index record {index} must be a JSON object.")
+            if not isinstance(record.get("metadata"), dict):
+                raise RuntimeError(f"Knowledge index record {index} is missing metadata.")
+            if not isinstance(record.get("embedding"), list):
+                raise RuntimeError(f"Knowledge index record {index} is missing an embedding vector.")
+            if not str(record.get("chunk_id", "")).strip():
+                raise RuntimeError(f"Knowledge index record {index} is missing a chunk_id.")
+            validated_records.append(record)
+
+        return {
+            "collection_name": str(payload.get("collection_name") or self.collection_name),
+            "records": validated_records,
+        }
+
+    def _write_index_payload(self, payload: dict[str, Any]) -> None:
+        self.index_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=self.index_path.parent,
+                prefix=f".{self.index_path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                temp_path = Path(handle.name)
+                json.dump(payload, handle, indent=2)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            temp_path.replace(self.index_path)
+        finally:
+            if temp_path is not None and temp_path.exists():
+                temp_path.unlink()
 
     @staticmethod
     def _cosine_similarity(left: list[float], right: list[float]) -> float:

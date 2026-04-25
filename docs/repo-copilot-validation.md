@@ -17,6 +17,8 @@ The repo-local experience is acceptable only if all of these are true:
 7. `sentinelops pull-models` can bootstrap the configured Ollama models.
 8. `sentinelops start --no-browser` boots the API and console successfully.
 9. Health, readiness, docs, analyze, investigate, workflow, and thread-history routes can be exercised against a realistic dummy repo scenario.
+10. `/investigate` and completed `/workflow/*` responses include `root_cause_diagnostics` with cited signals, a timeline, evidence strength, and missing-evidence notes.
+11. Completed investigations are saved with top error lines, next steps, and diagnostics, then indexed into the active knowledge backend when `incident_memory_auto_index=true`.
 
 ## Golden Validation Flow
 
@@ -96,6 +98,7 @@ Expected results:
 - the reported doc roots, log roots, models, and knowledge backend match `.sentinelops/project.toml`
 - container runs can stamp the correct Ollama endpoint with `--ollama-host`
 - readiness clearly explains whether Ollama and retrieval are ready
+- the active config exposes bounded request-body behavior through `max_request_body_bytes`
 
 ### 5. Start SentinelOps
 
@@ -123,6 +126,15 @@ Recommended sequence:
 5. `POST /workflow/{thread_id}/approve`
 6. `GET /workflow/{thread_id}/audit`
 7. `GET /workflow/threads`
+
+Expected investigation and workflow payload checks:
+
+- `root_cause_diagnostics.generated_by` is `deterministic_root_cause_engine`
+- diagnostics contain at least one cited signal for the dummy database and authentication scenarios
+- before/after log pairs set `regression_detected=true` when new error lines are present
+- workflow start can pause for approval and workflow completion preserves diagnostics in `final_report`
+- saved incidents contain `top_error_lines`, `next_steps`, and `root_cause_diagnostics`
+- a second investigation can retrieve prior incident memory after a saved summary is indexed
 
 ## Built-in Strict Validation Script
 
@@ -155,6 +167,7 @@ What it does:
 - starts the app
 - exercises health, readiness, knowledge ingest, analyze, investigate, workflow approval, audit, and thread listing
 - asserts that repo-local runbooks are actually used as evidence
+- checks the install path as a real attached project rather than relying on the SentinelOps source tree as the workspace
 
 ## Gold-Standard Expectations
 
@@ -164,5 +177,9 @@ What it does:
 - health and readiness surfaces explain missing dependencies clearly
 - `sentinelops pull-models` removes the need to remember manual model pull commands
 - Claude Code users get repo-local skills and memory files automatically when the repo is attached
+- root-cause output is typed, deterministic, cited, and available to both one-shot and LangGraph workflow paths
+- the LangGraph workflow performs causal analysis before hypothesis drafting and preserves approval pauses for sensitive remediation
+- saved incidents become repo-local retrieval memory through efficient upsert instead of full-index rewrites
+- runtime hardening is visible: bounded request bodies, standard security headers, constant-time token checks, and resilient SQLite defaults
 - the app works both as a standalone product and as a repo-local copilot
 - production requirements remain explicit instead of being hidden behind a fake "enterprise-ready" claim
