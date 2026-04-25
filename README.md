@@ -401,6 +401,10 @@ For normal project usage, install the CLI on your machine and run SentinelOps di
 - [Agent Setup Guides](docs/agents/README.md)
 - [Repo Copilot Validation](docs/repo-copilot-validation.md)
 - [Commercial And Enterprise Usage](docs/commercial-and-enterprise-usage.md)
+- [Disclaimer](DISCLAIMER.md)
+- [Terms Of Use](TERMS_OF_USE.md)
+- [Liability And Use Boundaries](docs/liability-and-use-boundaries.md)
+- [Operational Risk And Human Review](docs/operational-risk-and-human-review.md)
 - [Operator Walkthrough](docs/operator-walkthrough.md)
 - [Incident Library](docs/incident-library.md)
 - [Security Notes](SECURITY.md)
@@ -418,8 +422,10 @@ tests/      API, runtime, workflow, retrieval, and plug-and-play tests
 
 ## License
 
-SentinelOps source code in this repository is licensed under Apache-2.0.
+SentinelOps source code in this repository is licensed under Apache-2.0 and is provided without warranty. SentinelOps is an incident and operations copilot, not a guarantee of outage prevention, root-cause accuracy, security, compliance, or production success. Users are responsible for validating outputs, securing deployments, protecting data, and obtaining legal/compliance review for their own environments.
 
 - [LICENSE](LICENSE)
 - [NOTICE](NOTICE)
+- [DISCLAIMER.md](DISCLAIMER.md)
+- [TERMS_OF_USE.md](TERMS_OF_USE.md)
 - [SECURITY.md](SECURITY.md)

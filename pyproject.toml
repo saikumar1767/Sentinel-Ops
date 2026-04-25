@@ -58,6 +58,10 @@ packages = ["app"]
 "samples" = "app/_bundled/samples"
 "LICENSE" = "app/_bundled/LICENSE"
 "NOTICE" = "app/_bundled/NOTICE"
+"DISCLAIMER.md" = "app/_bundled/DISCLAIMER.md"
+"TERMS_OF_USE.md" = "app/_bundled/TERMS_OF_USE.md"
+"docs/liability-and-use-boundaries.md" = "app/_bundled/docs/liability-and-use-boundaries.md"
+"docs/operational-risk-and-human-review.md" = "app/_bundled/docs/operational-risk-and-human-review.md"
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -81,8 +85,12 @@ include = [
     "/tests",
     "/LICENSE",
     "/NOTICE",
+    "/DISCLAIMER.md",
+    "/TERMS_OF_USE.md",
     "/README.md",
     "/SECURITY.md",
+    "/docs/liability-and-use-boundaries.md",
+    "/docs/operational-risk-and-human-review.md",
     "/compose.yaml",
     "/compose.production.yaml",
 ]

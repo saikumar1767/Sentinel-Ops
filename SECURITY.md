@@ -2,6 +2,8 @@
 
 SentinelOps is designed to operate on sensitive operational data. The local-first repo mode is the primary product path, but shared production hardening is still a separate concern.
 
+SentinelOps is provided without a guarantee of security, compliance, incident prevention, root-cause accuracy, or production fitness. Security and operational outputs require qualified human review before use. See [DISCLAIMER.md](DISCLAIMER.md), [TERMS_OF_USE.md](TERMS_OF_USE.md), [docs/liability-and-use-boundaries.md](docs/liability-and-use-boundaries.md), and [docs/operational-risk-and-human-review.md](docs/operational-risk-and-human-review.md).
+
 ## Local-first Baseline
 
 For one engineer using SentinelOps on one office PC inside their own repositories:

@@ -6,6 +6,7 @@ The repository now includes:
 
 - Apache-2.0 licensing for SentinelOps application code in [LICENSE](../LICENSE)
 - a repo distribution notice in [NOTICE](../NOTICE)
+- prominent use-boundary documents in [DISCLAIMER.md](../DISCLAIMER.md), [TERMS_OF_USE.md](../TERMS_OF_USE.md), [liability-and-use-boundaries.md](liability-and-use-boundaries.md), and [operational-risk-and-human-review.md](operational-risk-and-human-review.md)
 - a default model/config policy aimed at commercially friendlier self-hosted components
 - production startup validation that rejects unsafe production profiles
 - repo-local copilot installation and generated agent/editor integrations
@@ -45,6 +46,7 @@ This is optional. It is not required to use SentinelOps as a local repo copilot.
 This repo does not replace:
 
 - your company's legal review
+- written commercial terms, warranty terms, indemnity terms, insurance review, or liability allocation
 - data retention policy
 - PII handling policy
 - export-control review
@@ -92,6 +94,7 @@ That is useful, but it also raises the importance of:
 - The application license covers SentinelOps source in this repository.
 - It does not replace review of deployed models or internal company data use.
 - It does not create indemnity, compliance certification, or legal sign-off.
+- It does not prevent someone from filing a claim, and enforceability can depend on jurisdiction, facts, marketing statements, paid services, gross negligence, willful misconduct, consumer-protection law, data-protection law, and the written contract in place.
 
 ## Practical Bottom Line
 
@@ -101,6 +104,10 @@ That is useful, but it also raises the importance of:
 ## Recommended Reading
 
 - [README.md](../README.md)
+- [DISCLAIMER.md](../DISCLAIMER.md)
+- [TERMS_OF_USE.md](../TERMS_OF_USE.md)
 - [SECURITY.md](../SECURITY.md)
+- [docs/liability-and-use-boundaries.md](liability-and-use-boundaries.md)
+- [docs/operational-risk-and-human-review.md](operational-risk-and-human-review.md)
 - [docs/architecture.md](architecture.md)
 - [docs/repo-copilot-validation.md](repo-copilot-validation.md)
