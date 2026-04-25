@@ -50,7 +50,7 @@ The API shell is FastAPI. Model calls go through Ollama. Retrieval can blend pac
 ### Tradeoffs
 
 - I did not pretend the repo is magically company-ready just because it is installable. Production still needs real identity, secrets, telemetry, and legal/security review.
-- I kept Ollama outside Docker because local GPU simplicity mattered more than squeezing everything into one container.
+- I kept Ollama as a normal local or remotely managed model service because one model runtime can support many attached repos, and Docker should remain a maintainer smoke-test path rather than the default user story.
 - I used repo-local generated files instead of inventing a custom control plane because portability and inspectability mattered more than hidden automation.
 
 ### What Went Wrong And What Improved

@@ -45,7 +45,7 @@ Local-first personal mode is the default product. Shared auth and centralized de
 - `uv sync`
 - `uv run sentinelops`
 - `uv run sentinelops attach --project-root . --agent all --knowledge-backend chroma`
-- `uv run sentinelops attach --project-root . --agent all --knowledge-backend chroma --ollama-host http://host.docker.internal:11434` when running SentinelOps inside Docker against host Ollama
+- `uv run sentinelops attach --project-root . --agent all --knowledge-backend chroma --ollama-host https://models.example.internal` when testing a centrally managed model endpoint
 - `uv run sentinelops pull-models`
 - `uv run sentinelops doctor`
 - `uv run pytest -q`
