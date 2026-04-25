@@ -5,7 +5,7 @@
 <h1 align="center">SentinelOps</h1>
 
 <p align="center">
-  <strong>why chase outages blind when one copilot can trace the path</strong>
+  <strong>A local-first incident and operations copilot for engineering repositories.</strong>
 </p>
 
 <p align="center">
@@ -19,6 +19,7 @@
 <p align="center">
   <a href="#what-it-does">What It Does</a> |
   <a href="#quick-start">Quick Start</a> |
+  <a href="#agent-setup-guides">Agent Guides</a> |
   <a href="#how-ollama-works">Ollama</a> |
   <a href="#repo-attachment">Repo Attachment</a> |
   <a href="#architecture">Architecture</a> |
@@ -30,7 +31,7 @@
 
 ## What It Does
 
-SentinelOps local-first incident and operations copilot for engineering repositories. It installs as a CLI and attaches to a developer's working repository as an incident copilot.
+SentinelOps is a local-first incident and operations copilot for engineering repositories. It installs as a CLI and attaches to a developer's working repository as an incident copilot.
 
 It can:
 
@@ -63,6 +64,7 @@ Typical use cases:
 - `uv`
 - Ollama for local model execution
 - Git for repo attachment detection
+- one supported coding agent or editor, such as Claude Code, Codex, Cursor, Windsurf, Cline, or GitHub Copilot
 
 Default models:
 
@@ -110,6 +112,22 @@ macOS / Linux installer:
 curl -fsSL https://raw.githubusercontent.com/saikumar1767/Sentinel-Ops/main/scripts/install_sentinelops.sh | bash
 ```
 
+## Agent Setup Guides
+
+For a clean install on a machine that may not have the required tools yet, use the guide for the agent or editor your team uses:
+
+| Agent or Editor | Setup Guide | Attach Command |
+| --- | --- | --- |
+| Claude Code | [docs/agents/claude-code.md](docs/agents/claude-code.md) | `sentinelops attach --agent claude --knowledge-backend chroma` |
+| Codex CLI | [docs/agents/codex.md](docs/agents/codex.md) | `sentinelops attach --agent codex --knowledge-backend chroma` |
+| Cursor | [docs/agents/cursor.md](docs/agents/cursor.md) | `sentinelops attach --agent cursor --knowledge-backend chroma` |
+| Windsurf | [docs/agents/windsurf.md](docs/agents/windsurf.md) | `sentinelops attach --agent windsurf --knowledge-backend chroma` |
+| Cline | [docs/agents/cline.md](docs/agents/cline.md) | `sentinelops attach --agent cline --knowledge-backend chroma` |
+| GitHub Copilot | [docs/agents/github-copilot.md](docs/agents/github-copilot.md) | `sentinelops attach --agent copilot --knowledge-backend chroma` |
+| Everything supported | [docs/agents/all-agents.md](docs/agents/all-agents.md) | `sentinelops attach --agent all --knowledge-backend chroma` |
+
+The README stays intentionally short. The agent guides contain the full from-scratch steps for installing prerequisites, installing SentinelOps, attaching the repo, and verifying readiness.
+
 ## How Ollama Works
 
 For normal developer usage, Ollama runs once on the developer's machine and serves every project through the same local endpoint:
@@ -144,25 +162,19 @@ Docker is not required for normal users. Docker is only used by maintainers and 
 
 `sentinelops attach` is the main setup command for a working project.
 
-It creates or updates:
+It creates or updates repo-local SentinelOps config and whichever agent/editor instruction files you choose with `--agent`.
+
+Common outputs:
 
 - `.sentinelops/project.toml`
 - `.sentinelops/agent-context.md`
 - `.gitignore` entry for `.sentinelops/`
-- `AGENTS.md`
-- `CLAUDE.md`
-- `.claude/skills/`
-- `.claude/agents/`
-- `.agents/plugins/marketplace.json`
-- `plugins/sentinelops-copilot/`
-- `.cursor/rules/`
-- `.windsurf/rules/`
-- `.clinerules/`
-- `.github/copilot-instructions.md`
 
 Shared instruction files are merged with SentinelOps-marked blocks. Dedicated generated files are preserved unless you pass `--overwrite`.
 
 SentinelOps does not change your application code, authentication, authorization, deployment manifests, or business logic during attach.
+
+For exact generated files per tool, use the [agent setup guides](docs/agents/README.md).
 
 ## Project Config
 
@@ -386,6 +398,7 @@ For normal project usage, install the CLI on your machine and run SentinelOps di
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Agent Setup Guides](docs/agents/README.md)
 - [Repo Copilot Validation](docs/repo-copilot-validation.md)
 - [Commercial And Enterprise Usage](docs/commercial-and-enterprise-usage.md)
 - [Operator Walkthrough](docs/operator-walkthrough.md)

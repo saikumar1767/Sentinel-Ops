@@ -36,6 +36,7 @@ Local-first personal mode is the default product. Shared auth and centralized de
 
 - `README.md`
 - `docs/architecture.md`
+- `docs/agents/README.md`
 - `docs/repo-copilot-validation.md`
 - `docs/commercial-and-enterprise-usage.md`
 - `SECURITY.md`

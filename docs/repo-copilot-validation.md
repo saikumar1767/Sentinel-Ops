@@ -22,6 +22,8 @@ The repo-local experience is acceptable only if all of these are true:
 
 ## Golden Validation Flow
 
+For human-facing install instructions by agent/editor, start with [docs/agents/README.md](agents/README.md).
+
 ### 1. Install SentinelOps from GitHub
 
 Windows PowerShell:

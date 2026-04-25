@@ -37,6 +37,7 @@ SentinelOps is an installable incident and operations copilot product. This repo
 - `app/` product code and CLI
 - `config/` checked-in non-secret config profiles
 - `docs/` product, rollout, and validation docs
+- `docs/agents/` from-scratch setup guides for each supported agent/editor
 - `data/` packaged incident and knowledge fixtures
 - `tests/` verification coverage
 
