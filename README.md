@@ -5,7 +5,7 @@
 <h1 align="center">SentinelOps</h1>
 
 <p align="center">
-  <strong>A local-first incident and operations copilot for engineering repositories.</strong>
+  <strong>why chase outages blind when one copilot can trace the path</strong>
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@
 
 ## What It Does
 
-SentinelOps installs as a CLI and attaches to a developer's working repository as an incident copilot.
+SentinelOps local-first incident and operations copilot for engineering repositories. It installs as a CLI and attaches to a developer's working repository as an incident copilot.
 
 It can:
 
