@@ -53,10 +53,12 @@ cd dummy-project
 sentinelops attach --agent all --knowledge-backend chroma
 ```
 
-When validating from Docker against Ollama on the host machine, use:
+For the default local workflow, `sentinelops attach` uses Ollama at `http://localhost:11434`.
+
+When validating a company-managed model endpoint, use:
 
 ```bash
-sentinelops attach --agent all --knowledge-backend chroma --ollama-host http://host.docker.internal:11434
+sentinelops attach --agent all --knowledge-backend chroma --ollama-host https://models.example.internal
 ```
 
 Expected results:
@@ -96,7 +98,7 @@ Expected results:
 - the runtime home is repo-local
 - `project_mode` reports `personal`
 - the reported doc roots, log roots, models, and knowledge backend match `.sentinelops/project.toml`
-- container runs can stamp the correct Ollama endpoint with `--ollama-host`
+- remote model endpoint validations can stamp the correct model URL with `--ollama-host`
 - readiness clearly explains whether Ollama and retrieval are ready
 - the active config exposes bounded request-body behavior through `max_request_body_bytes`
 
@@ -144,20 +146,19 @@ The repository now includes a repeatable handoff check:
 uv run python scripts/run_repo_live_check.py --pull-models
 ```
 
-Docker/container equivalent:
+Installed CLI equivalent:
 
 ```bash
-python scripts/run_repo_live_check.py --use-installed-cli --pull-models --ollama-host http://host.docker.internal:11434
+python scripts/run_repo_live_check.py --use-installed-cli --pull-models
 ```
 
-Before a Docker validation can be trusted, confirm the container can reach both PyPI and the host Ollama service:
+Docker is a maintainer and CI smoke-test path, not the normal developer install path. Before a Docker validation can be trusted, confirm the container can reach PyPI:
 
 ```bash
 docker run --rm python:3.11-slim python -c "import urllib.request; print(urllib.request.urlopen('https://pypi.org/simple/uv/', timeout=10).status)"
-docker run --rm --add-host=host.docker.internal:host-gateway python:3.11-slim python -c "import urllib.request; print(urllib.request.urlopen('http://host.docker.internal:11434/api/tags', timeout=10).status)"
 ```
 
-If either command fails, fix Docker Desktop networking or expose Ollama on a host interface before judging SentinelOps.
+If the command fails, fix Docker Desktop networking before judging SentinelOps.
 
 What it does:
 

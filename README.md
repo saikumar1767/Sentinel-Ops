@@ -5,114 +5,170 @@
 <h1 align="center">SentinelOps</h1>
 
 <p align="center">
-  <strong>why chase outages blind when one copilot can trace the path</strong>
+  <strong>A local-first incident and operations copilot for engineering repositories.</strong>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/FastAPI-API-009688?style=flat&logo=fastapi&logoColor=white" alt="FastAPI" />
-  <img src="https://img.shields.io/badge/Pydantic-Settings-E92063?style=flat&logo=pydantic&logoColor=white" alt="Pydantic" />
   <img src="https://img.shields.io/badge/Ollama-Local%20Models-111827?style=flat" alt="Ollama" />
   <img src="https://img.shields.io/badge/LangGraph-Workflow-1D4ED8?style=flat" alt="LangGraph" />
   <img src="https://img.shields.io/badge/Chroma-Retrieval-7C3AED?style=flat" alt="Chroma" />
-  <img src="https://img.shields.io/badge/OpenTelemetry-Observability-CA8A04?style=flat" alt="OpenTelemetry" />
+  <img src="https://img.shields.io/badge/License-Apache--2.0-blue.svg" alt="Apache-2.0" />
 </p>
 
 <p align="center">
-  <a href="#install">Install</a> &middot;
-  <a href="#operating-modes">Modes</a> &middot;
-  <a href="#single-project-config">Single Config</a> &middot;
-  <a href="#architecture">Architecture</a> &middot;
-  <a href="#agent-integrations">Agent Integrations</a> &middot;
-  <a href="#verification">Verification</a> &middot;
-  <a href="#docs">Docs</a>
+  <a href="#what-it-does">What It Does</a> |
+  <a href="#quick-start">Quick Start</a> |
+  <a href="#how-ollama-works">Ollama</a> |
+  <a href="#repo-attachment">Repo Attachment</a> |
+  <a href="#architecture">Architecture</a> |
+  <a href="#development">Development</a> |
+  <a href="#license">License</a>
 </p>
 
 ---
 
-SentinelOps is a local-first incident and operations copilot that attaches directly to an engineer's repository, turns repo evidence into deterministic root-cause diagnostics, and remembers completed investigations as searchable incident memory.
+## What It Does
 
-The intended default flow is:
+SentinelOps installs as a CLI and attaches to a developer's working repository as an incident copilot.
 
-- install `sentinelops`
-- pull the configured local models once
-- run `sentinelops attach --agent all` in your project
-- let `.sentinelops/project.toml` become the repo-local control plane
-- start `sentinelops` and use the console, API, or generated Claude/Codex/editor integrations
-- let completed investigations feed the repo-local knowledge store for future retrieval
+It can:
 
-The local-first path does not require login. Shared auth, OIDC, and centralized infrastructure remain optional overlays for companies that later choose a shared deployment.
+- read the repo-local docs, runbooks, deploy files, and allowed log roots declared in `.sentinelops/project.toml`
+- analyze pasted logs with `POST /analyze`
+- investigate repo log files with `POST /investigate`
+- run an approval-aware LangGraph workflow with `POST /workflow/investigate`
+- retrieve project runbooks and prior incident memory from Chroma or a simple local index
+- produce typed `root_cause_diagnostics` with causal signals, evidence strength, timelines, missing evidence, and remediation focus
+- save completed investigations as repo-local incident memory for future searches
+- generate Claude Code, Codex, Cursor, Windsurf, Cline, and GitHub Copilot guidance for the attached repo
 
-## Technologies Used
+The default product path is local-first and does not require login. Shared auth, remote model hosting, Postgres, and centralized telemetry are optional deployment choices for teams that need them.
 
-| Area | Technology |
-| --- | --- |
-| API shell | FastAPI, Uvicorn |
-| Config and contracts | Pydantic, Pydantic Settings |
-| Model runtime | Ollama |
-| Workflow orchestration | LangGraph |
-| Retrieval | Chroma `0.4.24` pinned for stable local persistent storage, or simple local index |
-| Root-cause brain | Deterministic evidence extraction, causal hypothesis scoring, regression detection, and incident-memory indexing |
-| Persistence | SQLite by default, Postgres optional |
-| Observability | OpenTelemetry |
-| Packaging | `uv`, Hatchling |
-| Testing | Pytest, httpx |
+## Who It Is For
 
-## Operating Modes
+SentinelOps is useful when an engineer wants a project-aware operational assistant inside the repo they already work in.
 
-| Mode | What it is | Login required? | Best fit |
-| --- | --- | --- | --- |
-| `personal` | Local-first repo copilot on one engineer's PC | No | Default office-PC usage across individual projects |
-| `shared` | Optional centralized rollout with shared persistence and auth | Yes | Multi-user internal deployment with governance needs |
+Typical use cases:
 
-Personal mode is the primary path. Shared mode is an optional second layer.
+- "Why is this service failing after a deploy?"
+- "Compare the current failing log with the last healthy log."
+- "Find the most relevant runbook and prior incident."
+- "Draft a remediation plan, but pause for approval before sensitive action."
+- "Give my coding agent repo-local operational context before it suggests fixes."
 
-## Install
+## Requirements
 
-| Platform | Command |
-| --- | --- |
-| Windows PowerShell | `irm https://raw.githubusercontent.com/saikumar1767/Sentinel-Ops/main/scripts/install_sentinelops.ps1 \| iex` |
-| macOS / Linux | `curl -fsSL https://raw.githubusercontent.com/saikumar1767/Sentinel-Ops/main/scripts/install_sentinelops.sh \| bash` |
-| Direct with `uv` | `uv tool install --from https://github.com/saikumar1767/Sentinel-Ops/archive/refs/heads/main.zip sentinel-ops` |
+- Python 3.11+
+- `uv`
+- Ollama for local model execution
+- Git for repo attachment detection
 
-Recommended first-run flow inside a repo:
+Default models:
+
+- chat/investigation: `mistral`
+- embeddings: `nomic-embed-text`
+
+Install Ollama from [ollama.com](https://ollama.com), then make sure it is running:
+
+```bash
+ollama serve
+```
+
+## Quick Start
+
+Install SentinelOps:
+
+```bash
+uv tool install --from https://github.com/saikumar1767/Sentinel-Ops/archive/refs/heads/main.zip sentinel-ops
+```
+
+Attach SentinelOps inside a project you are already working on:
 
 ```bash
 cd your-project
 sentinelops attach --agent all --knowledge-backend chroma
 sentinelops pull-models
 sentinelops doctor
-sentinelops
-```
-
-Helpful follow-up commands:
-
-```bash
-sentinelops paths
-sentinelops install-agent --agent all --overwrite
 sentinelops start --no-browser
 ```
 
-If SentinelOps runs in a container while Ollama runs on the host machine, attach with:
+Open:
 
-```bash
-sentinelops attach --agent all --knowledge-backend chroma --ollama-host http://host.docker.internal:11434
+- console: [http://127.0.0.1:8000/console](http://127.0.0.1:8000/console)
+- API docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+
+Windows installer:
+
+```powershell
+irm https://raw.githubusercontent.com/saikumar1767/Sentinel-Ops/main/scripts/install_sentinelops.ps1 | iex
 ```
 
-Docker validation also requires the container to reach PyPI during image build and reach the host Ollama endpoint during live checks. If those two network paths are blocked, fix Docker Desktop networking before treating the container result as a product failure.
+macOS / Linux installer:
 
-## Single Project Config
+```bash
+curl -fsSL https://raw.githubusercontent.com/saikumar1767/Sentinel-Ops/main/scripts/install_sentinelops.sh | bash
+```
 
-SentinelOps treats `.sentinelops/project.toml` as the single repo-local control file for:
+## How Ollama Works
 
-- project name and mode
-- doc roots and log roots
-- Ollama models
-- Ollama host
-- retrieval backend and Chroma settings
-- repo-local runtime storage paths
-- incident history paths used by the automatic incident-memory loop
+For normal developer usage, Ollama runs once on the developer's machine and serves every project through the same local endpoint:
 
-Example generated shape:
+```text
+http://localhost:11434
+```
+
+That means a developer can attach SentinelOps to many different repos, while all of them reuse the same local Ollama service.
+
+Example:
+
+```text
+Laptop
+|-- Ollama running once at localhost:11434
+|-- repo-a/.sentinelops/project.toml
+|-- repo-b/.sentinelops/project.toml
+`-- repo-c/.sentinelops/project.toml
+```
+
+Each repo gets its own SentinelOps config, runtime state, Chroma data, workflow checkpoints, audit data, and incident memory under that repo's `.sentinelops/` directory.
+
+If a company hosts Ollama or another compatible model service centrally, attach the repo with that endpoint:
+
+```bash
+sentinelops attach --agent all --knowledge-backend chroma --ollama-host https://models.example.internal
+```
+
+Docker is not required for normal users. Docker is only used by maintainers and CI to smoke-test the packaged service in a clean container environment.
+
+## Repo Attachment
+
+`sentinelops attach` is the main setup command for a working project.
+
+It creates or updates:
+
+- `.sentinelops/project.toml`
+- `.sentinelops/agent-context.md`
+- `.gitignore` entry for `.sentinelops/`
+- `AGENTS.md`
+- `CLAUDE.md`
+- `.claude/skills/`
+- `.claude/agents/`
+- `.agents/plugins/marketplace.json`
+- `plugins/sentinelops-copilot/`
+- `.cursor/rules/`
+- `.windsurf/rules/`
+- `.clinerules/`
+- `.github/copilot-instructions.md`
+
+Shared instruction files are merged with SentinelOps-marked blocks. Dedicated generated files are preserved unless you pass `--overwrite`.
+
+SentinelOps does not change your application code, authentication, authorization, deployment manifests, or business logic during attach.
+
+## Project Config
+
+The repo-local control plane is `.sentinelops/project.toml`.
+
+Example:
 
 ```toml
 schema_version = "2"
@@ -120,19 +176,10 @@ mode = "personal"
 
 [workspace]
 name = "checkout-service"
-doc_roots = [
-  "README.md",
-  "docs",
-  "runbooks",
-  ".github/workflows",
-  "compose.yaml",
-]
+doc_roots = ["README.md", "docs", "runbooks", ".github/workflows", "compose.yaml"]
 
 [logs]
-roots = [
-  "logs",
-  "data/logs",
-]
+roots = ["logs", "data/logs"]
 
 [models]
 analyze = "mistral"
@@ -145,9 +192,6 @@ ollama_host = "http://localhost:11434"
 [knowledge]
 backend = "chroma"
 chroma_client_mode = "persistent"
-chroma_host = "127.0.0.1"
-chroma_port = 8012
-chroma_ssl = false
 chroma_auto_start = false
 
 [storage]
@@ -158,271 +202,211 @@ knowledge_index_path = "data/runtime/knowledge/knowledge_index.json"
 chroma_path = "data/runtime/chroma"
 ```
 
-What `sentinelops attach` does:
-
-- creates `.sentinelops/`
-- writes `.sentinelops/project.toml`
-- writes `.sentinelops/agent-context.md`
-- adds `.sentinelops/` to the repo `.gitignore`
-- detects common docs, runbooks, deploy files, and log roots
-- optionally stamps the retrieval backend and Chroma runtime choices
-- generates Claude Code, Codex, Cursor, Windsurf, Cline, and Copilot integrations
-
-## Architecture
-
-### High-level system map
-
-```mermaid
-flowchart LR
-    Engineer["Engineer In Attached Repo"] --> CLI["sentinelops CLI"]
-    subgraph Repo["Project Workspace"]
-        Config[".sentinelops/project.toml"]
-        AgentFiles["CLAUDE / AGENTS / Codex / Cursor / Windsurf / Copilot"]
-        Logs["Repo Log Roots"]
-        Docs["README / Docs / Runbooks / Workflows"]
-    end
-    CLI --> Config
-    CLI --> AgentFiles
-    CLI --> API["FastAPI App"]
-    API --> Console["Operations Console"]
-    API --> Analyze["Analyze Service"]
-    API --> Investigate["Investigation Service"]
-    API --> Workflow["Workflow Service"]
-    Analyze --> Docs
-    Investigate --> Docs
-    Investigate --> Logs
-    Workflow --> Docs
-    Workflow --> Logs
-    Investigate --> Brain["Root-Cause Engine"]
-    Workflow --> Brain
-    Analyze --> Models["Ollama"]
-    Investigate --> Models
-    Workflow --> Models
-    Analyze --> Retrieval["Simple Index or Chroma"]
-    Investigate --> Retrieval
-    Workflow --> Retrieval
-    Brain --> IncidentMemory["Saved Incident Memory"]
-    IncidentMemory --> Retrieval
-    Workflow --> RuntimeState["Repo-local Runtime State"]
-```
-
-### Repository architecture
-
-```mermaid
-flowchart TB
-    Root["SentinelOps Repository"]
-    Root --> App["app/"]
-    App --> API["api/routers"]
-    App --> Services["services/ analyze investigate workflow"]
-    App --> Bootstrap["cli.py / bootstrap.py / agent_integrations.py"]
-    App --> Retrieval["rag/"]
-    App --> Console["static console surfaces"]
-    Root --> Config["config/ local + production profiles"]
-    Root --> Data["data/ packaged incident + knowledge fixtures"]
-    Root --> Docs["docs/ architecture + rollout + validation"]
-    Root --> Scripts["scripts/ installers + live checks"]
-    Root --> Tests["tests/ API + runtime + plug-and-play coverage"]
-```
-
-### Attach and bootstrap flow
-
-```mermaid
-flowchart LR
-    Repo["Developer Repo"] --> Attach["sentinelops attach --agent all"]
-    Attach --> Detect["Detect repo markers, docs, deploy files, logs"]
-    Detect --> Manifest["Write .sentinelops/project.toml"]
-    Detect --> Context["Write .sentinelops/agent-context.md"]
-    Detect --> Integrations["Generate Claude and other agent files"]
-    Manifest --> Start["sentinelops"]
-    Start --> Runtime["Apply runtime env from project config"]
-    Runtime --> API["FastAPI app + console"]
-```
-
-### Runtime request flow
-
-```mermaid
-flowchart LR
-    Request["API Request / Console Action"] --> Router["FastAPI Router"]
-    Router --> Service["Analyze / Investigate / Workflow Service"]
-    Service --> Settings["Pydantic Settings"]
-    Settings --> FileTools["Safe File Tools"]
-    Settings --> Loader["Knowledge Document Loader"]
-    Settings --> Gateway["Ollama Gateway"]
-    Settings --> Store["Simple Store or Chroma Store"]
-    FileTools --> Logs["Configured Log Roots"]
-    Loader --> RepoDocs["Configured Doc Roots"]
-    Service --> Brain["Deterministic Root-Cause Engine"]
-    Brain --> Diagnostics["root_cause_diagnostics"]
-    Gateway --> Model["Local Model Runtime"]
-    Store --> Response["Grounded Incident Response"]
-    Diagnostics --> Response
-```
-
-### Root-cause brain and memory
-
-The investigation brain has two layers:
-
-- deterministic causal analysis extracts log events, known failure signals, severity, regression deltas, missing evidence, a timeline, and ranked remediation focus
-- model-backed summarization uses that deterministic report as grounded context instead of free-form guessing
-
-The typed response field is `root_cause_diagnostics`. It is returned by `/investigate`, completed `/workflow/*` runs, workflow thread history, and saved incident summaries. Saved incidents include top error lines, next steps, and diagnostics; when `incident_memory_auto_index=true`, SentinelOps upserts that summary into the active knowledge backend so future incidents can retrieve prior fixes.
-
-### Data and storage flow
-
-```mermaid
-flowchart LR
-    Manifest[".sentinelops/project.toml"] --> Settings["Runtime Settings"]
-    Settings --> LogRoots["allowed_log_roots"]
-    Settings --> DocRoots["workspace_doc_roots"]
-    Settings --> Models["analyze / investigate / embedding models"]
-    Settings --> Backend["simple or chroma backend"]
-    Settings --> Storage["runtime storage paths"]
-    Storage --> Incidents["incident history"]
-    Storage --> Workflow["workflow checkpoints"]
-    Storage --> Audit["audit trail"]
-    Storage --> Index["knowledge index / chroma"]
-    Incidents --> Memory["prior incident documents"]
-    Memory --> Index
-```
-
-More detailed breakdowns live in [docs/architecture.md](docs/architecture.md).
-
-## Agent Integrations
-
-`sentinelops attach --agent all` wires multiple tools at once.
-
-| Agent / Tool | Generated Surface | What it Gives You |
-| --- | --- | --- |
-| Claude Code | `.claude/skills/`, `.claude/agents/`, merged `CLAUDE.md` block | Repo-local SentinelOps skills, a dedicated ops subagent, and always-on project memory |
-| Codex | `.agents/plugins/marketplace.json`, `plugins/sentinelops-copilot/` | Repo-local plugin, skill, commands, and marketplace entry |
-| Cursor | `.cursor/rules/sentinelops.mdc` | Always-on repo rule for ops and incident work |
-| Windsurf | `.windsurf/rules/sentinelops.md` | Repo-local ops-copilot instruction file |
-| Cline | `.clinerules/sentinelops.md` | Repo-local investigation and readiness workflow guidance |
-| GitHub Copilot | `.github/copilot-instructions.md` | Merged SentinelOps block for repo-local operational context |
-| Cross-agent | `AGENTS.md` | Shared repo guidance that other tools can read directly |
-
-Safety behavior:
-
-- shared files like `AGENTS.md`, `CLAUDE.md`, `.agents/plugins/marketplace.json`, and `.github/copilot-instructions.md` are merged instead of blindly replaced
-- dedicated generated files are preserved unless you re-run with `--overwrite`
-
-## Core Product Surfaces
-
-- Operations console: `/console`
-- Console overview: `/console/overview`
-- Incident library: `/console/incidents`
-- Incident timeline: `/console/timeline`
-- Fast analysis: `POST /analyze`
-- One-shot investigation with deterministic diagnostics: `POST /investigate`
-- Workflow investigation with LangGraph causal analysis and approval gates: `POST /workflow/investigate`
-- Workflow thread history: `GET /workflow/threads`
-- Current user: `/me`
-- Evaluation summary: `/eval/summary`
-- Metrics: `/metrics`
-
-## Optional Shared Deployment
-
-The shared mode exists for teams that later want one centralized deployment. It is optional and sits on top of the local-first product.
-
-```bash
-sentinelops start --profile production
-```
-
-Shared-mode requirements:
-
-- `deployment_mode=production`
-- `auth_mode=oidc`
-- shared Postgres metadata and workflow checkpoint stores
-- `https://` public base URL
-- OTLP telemetry export
-- managed secrets
-
-Runtime hardening applies in local and shared modes: request bodies are bounded by `max_request_body_bytes`, standard browser security headers are emitted on HTTP responses, API-key and bearer-token checks use constant-time comparison, and SQLite stores enable WAL, foreign keys, and busy timeouts.
-
-Starter company-style Docker stack:
-
-```bash
-docker compose up --build sentinelops-postgres sentinelops-keycloak sentinelops-api
-```
-
-## Run From Source
-
-```bash
-uv sync
-uv run sentinelops pull-models
-uv run sentinelops
-```
-
-Open:
-
-- [http://127.0.0.1:8000/console](http://127.0.0.1:8000/console)
-- [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-
-## Verification
-
-Local verification:
-
-```bash
-uv run pytest -q
-uv run pytest -q tests/test_console_surface.py
-uv run pytest -q tests/test_runtime_surface.py
-uv run pytest -q tests/test_workflow_api.py
-uv run pytest -q tests/test_root_cause_engine.py
-uv run python scripts/run_eval_summary.py
-uv run python scripts/run_operations_report.py
-```
-
-Repo-local acceptance path:
+## Commands
 
 ```bash
 sentinelops attach --agent all --knowledge-backend chroma
 sentinelops pull-models
-sentinelops paths
 sentinelops doctor
+sentinelops paths
 sentinelops start --no-browser
+sentinelops install-agent --agent all --overwrite
+sentinelops version
 ```
 
-Strict live dummy-repo validation:
+Use `sentinelops doctor` whenever you want to confirm that Ollama, models, retrieval, and API capabilities are ready.
+
+## API And Console
+
+Core routes:
+
+- `GET /health`
+- `GET /ready`
+- `GET /ready/strict`
+- `GET /console`
+- `GET /console/overview`
+- `GET /console/incidents`
+- `GET /console/timeline`
+- `POST /knowledge/ingest`
+- `POST /knowledge/search`
+- `POST /analyze`
+- `POST /investigate`
+- `POST /workflow/investigate`
+- `POST /workflow/{thread_id}/approve`
+- `GET /workflow/{thread_id}/audit`
+- `GET /workflow/threads`
+- `GET /metrics`
+
+Investigation and completed workflow responses include `root_cause_diagnostics`.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Engineer["Engineer"] --> Repo["Attached Repo"]
+    Repo --> Config[".sentinelops/project.toml"]
+    Repo --> Docs["Docs and Runbooks"]
+    Repo --> Logs["Allowed Log Roots"]
+    Repo --> Agents["Generated Agent Files"]
+    Config --> API["SentinelOps FastAPI App"]
+    Docs --> Retrieval["Chroma or Simple Index"]
+    Logs --> Tools["Safe File Tools"]
+    Tools --> Brain["Root-Cause Engine"]
+    Retrieval --> Brain
+    Brain --> Workflow["LangGraph Workflow"]
+    Brain --> Response["Typed Incident Response"]
+    Workflow --> Approval["Approval Pause"]
+    Response --> Memory["Saved Incident Memory"]
+    Memory --> Retrieval
+    API --> Ollama["Ollama Model Host"]
+```
+
+Main internal pieces:
+
+- FastAPI application and console
+- Pydantic settings and schemas
+- safe local file tools
+- deterministic root-cause engine
+- Ollama gateway
+- Chroma or simple local retrieval
+- LangGraph workflow orchestration
+- SQLite persistence for local workflow, audit, and incident state
+
+## Root-Cause Diagnostics
+
+The deterministic root-cause engine extracts:
+
+- failure signals such as database pool exhaustion, missing deployment config, schema mismatch, DNS failure, queue backlog, authentication abuse, disk pressure, and memory pressure
+- incident type and severity
+- regression evidence from before/after log comparison
+- source citations for every signal
+- causal timeline
+- missing evidence
+- remediation focus
+
+This produces the `root_cause_diagnostics` object used by `/investigate`, `/workflow/*`, saved incidents, and incident memory.
+
+## Incident Memory
+
+When an investigation completes, SentinelOps saves a structured incident summary under the attached repo's runtime directory.
+
+Saved summaries include:
+
+- request
+- candidate log paths
+- incident type and severity
+- manager summary
+- suspected root cause
+- top error lines
+- next steps
+- source citations
+- root-cause diagnostics
+- confidence
+
+When `incident_memory_auto_index=true`, saved incident summaries are upserted into the active retrieval backend as `prior_incident` documents.
+
+## Security Model
+
+Local personal mode:
+
+- auth is disabled by default
+- runtime state is repo-local
+- no shared server is required
+- model calls go to the configured Ollama endpoint
+
+Shared deployment mode:
+
+- enable OIDC
+- use HTTPS
+- use managed secrets
+- use shared Postgres if multiple users need centralized state
+- define retention and redaction policy for logs, prompts, retrieval artifacts, and saved incident memory
+
+Runtime hardening includes bounded request bodies, standard browser security headers, constant-time API-key/token comparison, SQLite WAL, foreign keys, and busy timeouts.
+
+## Development
+
+Clone and run from source:
 
 ```bash
-uv run python scripts/run_repo_live_check.py --pull-models
+git clone https://github.com/saikumar1767/Sentinel-Ops.git
+cd Sentinel-Ops
+uv sync
+uv run sentinelops
 ```
 
-Optional live dependency test:
+Attach the source checkout to itself for local development:
 
 ```bash
-set SENTINELOPS_RUN_LIVE_TESTS=1
-uv run pytest -q tests/test_live_stack.py
+uv run sentinelops attach --project-root . --agent all --knowledge-backend chroma
+uv run sentinelops pull-models
+uv run sentinelops doctor
 ```
 
-## Docs
+Run tests:
 
-- Architecture: [docs/architecture.md](docs/architecture.md)
-- Repo copilot validation: [docs/repo-copilot-validation.md](docs/repo-copilot-validation.md)
-- Commercial and enterprise usage: [docs/commercial-and-enterprise-usage.md](docs/commercial-and-enterprise-usage.md)
-- Operator walkthrough: [docs/operator-walkthrough.md](docs/operator-walkthrough.md)
-- Incident library: [docs/incident-library.md](docs/incident-library.md)
-- Video walkthrough: [docs/video-walkthrough.md](docs/video-walkthrough.md)
-- Interview story: [docs/interview-story.md](docs/interview-story.md)
-- Resume bullets: [docs/resume-bullets.md](docs/resume-bullets.md)
+```bash
+uv run pytest -q
+```
 
-## Repo Layout
+Run deterministic product reports:
 
-- `app/` API shell, services, workflow orchestration, static console assets, CLI, and agent integrations
-- `config/` checked-in non-secret app config for local and production profiles
-- `data/incident_library/` packaged incident profiles
-- `data/knowledge/` packaged runbooks, notes, and reference docs
-- `docs/` architecture, rollout, validation, and communication assets
-- `samples/` starter logs and local demo artifacts
-- `scripts/` installers, startup helpers, and live validation commands
-- `tests/` API, runtime, workflow, and plug-and-play verification coverage
+```bash
+uv run python scripts/run_eval_summary.py
+uv run python scripts/run_operations_report.py
+```
+
+Run the strict live repo check:
+
+```bash
+uv run python scripts/run_repo_live_check.py --use-installed-cli --knowledge-backend chroma
+```
+
+This creates a dummy repo, attaches SentinelOps, starts the API, ingests knowledge, runs analyze/investigate/workflow checks, verifies root-cause diagnostics, checks saved incident memory, and stops the app.
+
+## Docker
+
+Docker is a maintainer and CI validation path, not the normal way developers use SentinelOps.
+
+Build the image:
+
+```bash
+docker build -t sentinelops-ci .
+```
+
+Run a health smoke test:
+
+```bash
+docker run --rm -p 8000:8000 sentinelops-ci
+curl http://127.0.0.1:8000/health
+```
+
+For normal project usage, install the CLI on your machine and run SentinelOps directly in the repo you are working on.
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Repo Copilot Validation](docs/repo-copilot-validation.md)
+- [Commercial And Enterprise Usage](docs/commercial-and-enterprise-usage.md)
+- [Operator Walkthrough](docs/operator-walkthrough.md)
+- [Incident Library](docs/incident-library.md)
+- [Security Notes](SECURITY.md)
+
+## Repository Layout
+
+```text
+app/        FastAPI app, CLI, services, workflows, retrieval, console assets
+config/     checked-in local and production config profiles
+data/       packaged incident templates, knowledge, logs, and fixtures
+docs/       architecture, validation, walkthrough, and rollout docs
+scripts/    installers, reports, and live validation scripts
+tests/      API, runtime, workflow, retrieval, and plug-and-play tests
+```
 
 ## License
 
-SentinelOps source in this repository is licensed under Apache-2.0.
+SentinelOps source code in this repository is licensed under Apache-2.0.
 
-- License text: [LICENSE](LICENSE)
-- Distribution notice: [NOTICE](NOTICE)
-- Security guidance: [SECURITY.md](SECURITY.md)
-
-Commercial use still requires review of deployed models, connected data, and third-party services. See [docs/commercial-and-enterprise-usage.md](docs/commercial-and-enterprise-usage.md).
+- [LICENSE](LICENSE)
+- [NOTICE](NOTICE)
+- [SECURITY.md](SECURITY.md)

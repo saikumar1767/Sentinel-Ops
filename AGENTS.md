@@ -21,8 +21,8 @@ SentinelOps is an installable incident and operations copilot product. This repo
   `uv run sentinelops`
 - Attach the repo-local copilot:
   `uv run sentinelops attach --project-root . --agent all --knowledge-backend chroma`
-- Attach from Docker to host Ollama:
-  `uv run sentinelops attach --project-root . --agent all --knowledge-backend chroma --ollama-host http://host.docker.internal:11434`
+- Attach to a centrally managed model endpoint:
+  `uv run sentinelops attach --project-root . --agent all --knowledge-backend chroma --ollama-host https://models.example.internal`
 - Pull the reviewed local model set:
   `uv run sentinelops pull-models`
 - Inspect the repo-local control contract:
