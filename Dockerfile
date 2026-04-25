@@ -8,7 +8,8 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir uv
 
-COPY pyproject.toml uv.lock README.md LICENSE NOTICE ./
+COPY pyproject.toml uv.lock README.md LICENSE NOTICE DISCLAIMER.md TERMS_OF_USE.md ./
+COPY docs/liability-and-use-boundaries.md docs/operational-risk-and-human-review.md ./docs/
 COPY app ./app
 COPY config ./config
 COPY data ./data
@@ -33,7 +34,8 @@ COPY config ./config
 COPY data ./data
 COPY scripts ./scripts
 COPY .env.example ./.env.example
-COPY LICENSE ./LICENSE
+COPY LICENSE NOTICE DISCLAIMER.md TERMS_OF_USE.md ./
+COPY docs/liability-and-use-boundaries.md docs/operational-risk-and-human-review.md ./docs/
 
 RUN mkdir -p /app/data/runtime /tmp/sentinelops \
     && chown -R sentinelops:sentinelops /app /tmp/sentinelops

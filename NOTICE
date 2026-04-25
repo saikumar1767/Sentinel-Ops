@@ -7,3 +7,5 @@ See LICENSE for the full license text.
 Important boundary:
 - The Apache-2.0 license covers the SentinelOps source in this repository.
 - Connected models, data sources, corpora, and third-party services may require additional legal, security, or compliance review before commercial or enterprise use.
+- SentinelOps is provided without warranty, support obligation, indemnity, compliance certification, security certification, or guarantee of operational outcome unless a separate signed written agreement says otherwise.
+- See DISCLAIMER.md, TERMS_OF_USE.md, SECURITY.md, docs/liability-and-use-boundaries.md, and docs/operational-risk-and-human-review.md for additional use boundaries.
