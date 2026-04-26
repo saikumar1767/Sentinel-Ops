@@ -9,6 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from app.evaluation import (
+    eval_data_root,
     load_eval_cases,
     load_investigation_eval_cases,
     load_rag_eval_cases,
@@ -18,6 +19,7 @@ from app.evaluation import (
     score_rag_search_results,
     score_workflow_thread_response,
 )
+from app.bootstrap import resource_root
 from app.ollama_client import ChatTurn, ToolCallSpec
 from app.rag.chunker import MarkdownChunker
 from app.rag.loader import KnowledgeDocumentLoader
@@ -39,7 +41,7 @@ from app.schemas import (
 from app.services.analyze_service import AnalyzeService
 from app.services.investigation_service import InvestigationService
 from app.services.workflow_service import WorkflowService
-from app.settings import PROJECT_ROOT, Settings
+from app.settings import Settings
 from app.tools.file_tools import FileTools
 from app.tools.incident_tools import IncidentTools
 from app.tools.tool_registry import ToolRegistry
@@ -399,10 +401,11 @@ class EvaluationSummaryService:
 
         with TemporaryDirectory(prefix="sentinelops-eval-rag-") as temp_dir_name:
             temp_dir = Path(temp_dir_name)
+            data_root = eval_data_root()
             settings = Settings(
-                knowledge_base_dir=PROJECT_ROOT / "data" / "knowledge",
-                incident_templates_dir=PROJECT_ROOT / "data" / "incident_templates",
-                incident_history_dir=PROJECT_ROOT / "data" / "reference_incidents",
+                knowledge_base_dir=data_root / "knowledge",
+                incident_templates_dir=data_root / "incident_templates",
+                incident_history_dir=data_root / "reference_incidents",
                 knowledge_index_path=temp_dir / "knowledge-index.json",
                 knowledge_auto_ingest=False,
                 knowledge_store_backend="simple",
@@ -534,11 +537,12 @@ class EvaluationSummaryService:
 
     def _build_investigation_service(self, case, workdir: Path) -> InvestigationService:
         history_dir = workdir / "reference_incidents"
-        shutil.copytree(PROJECT_ROOT / "data" / "reference_incidents", history_dir)
+        data_root = eval_data_root()
+        shutil.copytree(data_root / "reference_incidents", history_dir)
 
         settings = Settings(
-            allowed_log_roots=[PROJECT_ROOT / "samples", PROJECT_ROOT / "data" / "logs"],
-            incident_templates_dir=PROJECT_ROOT / "data" / "incident_templates",
+            allowed_log_roots=[resource_root() / "samples", data_root / "logs"],
+            incident_templates_dir=data_root / "incident_templates",
             incident_history_dir=history_dir,
         )
         registry = ToolRegistry(
@@ -555,11 +559,12 @@ class EvaluationSummaryService:
 
     def _build_workflow_service(self, case, workdir: Path) -> WorkflowService:
         history_dir = workdir / "reference_incidents"
-        shutil.copytree(PROJECT_ROOT / "data" / "reference_incidents", history_dir)
+        data_root = eval_data_root()
+        shutil.copytree(data_root / "reference_incidents", history_dir)
 
         settings = Settings(
-            allowed_log_roots=[PROJECT_ROOT / "samples", PROJECT_ROOT / "data" / "logs"],
-            incident_templates_dir=PROJECT_ROOT / "data" / "incident_templates",
+            allowed_log_roots=[resource_root() / "samples", data_root / "logs"],
+            incident_templates_dir=data_root / "incident_templates",
             incident_history_dir=history_dir,
             workflow_checkpoint_path=workdir / "workflow" / "checkpoints.sqlite",
         )

@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from app.bootstrap import resource_root
 from app.schemas import (
     ALLOWED_INCIDENT_TYPES,
     ALLOWED_SEVERITIES,
@@ -101,7 +102,11 @@ class WorkflowEvalCase(BaseModel):
 
 
 def eval_cases_dir() -> Path:
-    return Path(__file__).resolve().parent.parent / "data" / "eval_cases"
+    return eval_data_root() / "eval_cases"
+
+
+def eval_data_root() -> Path:
+    return resource_root() / "data"
 
 
 def load_eval_cases(directory: Path | None = None) -> list[EvalCase]:
@@ -116,7 +121,7 @@ def load_eval_cases(directory: Path | None = None) -> list[EvalCase]:
 
 
 def investigation_eval_cases_dir() -> Path:
-    return Path(__file__).resolve().parent.parent / "data" / "tool_eval_cases"
+    return eval_data_root() / "tool_eval_cases"
 
 
 def load_investigation_eval_cases(directory: Path | None = None) -> list[InvestigationEvalCase]:
@@ -131,7 +136,7 @@ def load_investigation_eval_cases(directory: Path | None = None) -> list[Investi
 
 
 def rag_eval_cases_dir() -> Path:
-    return Path(__file__).resolve().parent.parent / "data" / "rag_eval_cases"
+    return eval_data_root() / "rag_eval_cases"
 
 
 def load_rag_eval_cases(directory: Path | None = None) -> list[RagEvalCase]:

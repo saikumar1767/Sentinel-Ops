@@ -24,6 +24,8 @@ This path does not generate Claude Code, Codex, Cursor, Windsurf, Cline, or GitH
 
 Initial installation may use the internet if you install Git, uv, Ollama, SentinelOps, or model files from public sources.
 
+For a fully air-gapped machine, install SentinelOps and preload the Ollama model files before disconnecting from the network. If the models are already present, `sentinelops doctor` is enough to verify them; `sentinelops pull-models` should be treated as a convenience bootstrap command that may ask local Ollama to fetch missing models.
+
 After installation and model download are complete, the debugging and root-cause workflow can run locally if:
 
 - Ollama uses local models, not `:cloud` models
@@ -215,4 +217,3 @@ Confirm:
 - configured model names are local model names
 - readiness reports Ollama and retrieval as available
 - no external agent/editor integration files were generated
-

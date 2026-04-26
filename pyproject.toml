@@ -50,11 +50,14 @@ packages = ["app"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "config" = "app/_bundled/config"
+"data/eval_cases" = "app/_bundled/data/eval_cases"
 "data/incident_library" = "app/_bundled/data/incident_library"
 "data/incident_templates" = "app/_bundled/data/incident_templates"
 "data/knowledge" = "app/_bundled/data/knowledge"
 "data/logs" = "app/_bundled/data/logs"
+"data/rag_eval_cases" = "app/_bundled/data/rag_eval_cases"
 "data/reference_incidents" = "app/_bundled/data/reference_incidents"
+"data/tool_eval_cases" = "app/_bundled/data/tool_eval_cases"
 "samples" = "app/_bundled/samples"
 "LICENSE" = "app/_bundled/LICENSE"
 "NOTICE" = "app/_bundled/NOTICE"
@@ -74,11 +77,14 @@ include = [
     "/app",
     "/CLAUDE.md",
     "/config",
+    "/data/eval_cases",
     "/data/incident_library",
     "/data/incident_templates",
     "/data/knowledge",
     "/data/logs",
+    "/data/rag_eval_cases",
     "/data/reference_incidents",
+    "/data/tool_eval_cases",
     "/docs/assets",
     "/samples",
     "/scripts",
