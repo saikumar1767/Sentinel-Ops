@@ -69,6 +69,38 @@ def test_root_cause_engine_builds_causal_database_hypothesis() -> None:
     assert "Dominant hypothesis" in report.prompt_summary()
 
 
+def test_root_cause_engine_prefers_postgres_pool_exhaustion_over_symptoms() -> None:
+    records = [
+        ToolExecutionRecord(
+            name="read_log_file",
+            arguments={"path": "logs/checkout-prod.log"},
+            ok=True,
+            payload={
+                "ok": True,
+                "path": "logs/checkout-prod.log",
+                "selected_lines": [
+                    "1: 2026-04-26T13:42:10Z FATAL postgres SQLSTATE 53300 remaining connection slots are reserved for superuser connections",
+                    "2: 2026-04-26T13:42:12Z ERROR checkout DB_POOL_SIZE=20 workers waiting for database connection",
+                    "3: 2026-04-26T13:42:18Z WARN checkout p99 latency 12000ms and HTTP 5xx rate 38%",
+                ],
+            },
+        )
+    ]
+
+    report = RootCauseEngine().analyze(
+        request=InvestigateRequest(prompt="Investigate why checkout is returning 5xx and high latency."),
+        records=records,
+        retrieval_hits=[],
+    )
+
+    assert report.incident_type == "database"
+    assert report.severity == "high"
+    assert report.root_cause.startswith("Database connection pool exhaustion")
+    assert report.primary_hypothesis is not None
+    assert "connection_pool_exhaustion" in report.primary_hypothesis.supporting_signals
+    assert "cpu_saturation" not in report.primary_hypothesis.supporting_signals
+
+
 def test_root_cause_engine_identifies_deployment_config_and_schema_blocker() -> None:
     records = [
         ToolExecutionRecord(

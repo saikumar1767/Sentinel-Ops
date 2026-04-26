@@ -1,5 +1,9 @@
+import tomllib
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
+import app.evaluation as evaluation
 from app.evaluation import (
     load_eval_cases,
     load_investigation_eval_cases,
@@ -7,6 +11,25 @@ from app.evaluation import (
     load_workflow_eval_cases,
 )
 from app.main import app
+
+
+def test_eval_fixture_dirs_resolve_from_packaged_resource_root(tmp_path, monkeypatch) -> None:
+    resource_root = tmp_path / "packaged"
+    monkeypatch.setattr(evaluation, "resource_root", lambda: resource_root)
+
+    assert evaluation.eval_cases_dir() == resource_root / "data" / "eval_cases"
+    assert evaluation.investigation_eval_cases_dir() == resource_root / "data" / "tool_eval_cases"
+    assert evaluation.rag_eval_cases_dir() == resource_root / "data" / "rag_eval_cases"
+
+
+def test_pyproject_bundles_eval_fixture_data() -> None:
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    wheel_includes = pyproject["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
+    sdist_includes = set(pyproject["tool"]["hatch"]["build"]["targets"]["sdist"]["include"])
+
+    for source_path in ("data/eval_cases", "data/tool_eval_cases", "data/rag_eval_cases"):
+        assert source_path in wheel_includes
+        assert f"/{source_path}" in sdist_includes
 
 
 def test_eval_summary_endpoint_returns_deterministic_report() -> None:

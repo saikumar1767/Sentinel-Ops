@@ -163,7 +163,17 @@ class _SignalPattern:
 
 
 _SIGNAL_PATTERNS = (
-    _SignalPattern("connection_pool_exhaustion", "database", "high", 5.0, re.compile(r"pool exhausted|connection pool", re.I)),
+    _SignalPattern(
+        "connection_pool_exhaustion",
+        "database",
+        "high",
+        5.0,
+        re.compile(
+            r"pool exhausted|connection pool|remaining connection slots|connection slots .*reserved|"
+            r"too many clients|sqlstate\s*53300|db_pool_size|waiting for (?:a )?(?:free )?(?:postgres|database|db) connection",
+            re.I,
+        ),
+    ),
     _SignalPattern("database_timeout", "database", "high", 4.0, re.compile(r"database.*timeout|timeout.*database|postgres.*timeout", re.I)),
     _SignalPattern("stalled_database_checkout", "database", "high", 3.5, re.compile(r"stalled.*database connection|waiting for (?:a )?free database connection", re.I)),
     _SignalPattern("database_deadlock", "database", "high", 4.5, re.compile(r"deadlock|lock wait timeout", re.I)),
