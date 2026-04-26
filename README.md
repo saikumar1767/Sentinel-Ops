@@ -118,6 +118,7 @@ For a clean install on a machine that may not have the required tools yet, use t
 
 | Agent or Editor | Setup Guide | Attach Command |
 | --- | --- | --- |
+| Fully local SentinelOps | [docs/agents/local-only.md](docs/agents/local-only.md) | `sentinelops attach --knowledge-backend chroma --ollama-host http://localhost:11434` |
 | Claude Code | [docs/agents/claude-code.md](docs/agents/claude-code.md) | `sentinelops attach --agent claude --knowledge-backend chroma` |
 | Codex CLI | [docs/agents/codex.md](docs/agents/codex.md) | `sentinelops attach --agent codex --knowledge-backend chroma` |
 | Cursor | [docs/agents/cursor.md](docs/agents/cursor.md) | `sentinelops attach --agent cursor --knowledge-backend chroma` |
@@ -155,6 +156,14 @@ If a company hosts Ollama or another compatible model service centrally, attach 
 ```bash
 sentinelops attach --agent all --knowledge-backend chroma --ollama-host https://models.example.internal
 ```
+
+For strict no-outside-world usage, attach without `--agent` and point only to localhost or a private LAN/VPN Ollama host:
+
+```bash
+sentinelops attach --knowledge-backend chroma --ollama-host http://localhost:11434
+```
+
+Then keep the model names in `.sentinelops/project.toml` pointed at local Ollama models. Avoid model names ending in `:cloud`, web search, external retrieval, and cloud-backed coding agents when the investigation must remain local.
 
 Docker is not required for normal users. Docker is only used by maintainers and CI to smoke-test the packaged service in a clean container environment.
 

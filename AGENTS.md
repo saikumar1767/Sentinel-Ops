@@ -21,6 +21,8 @@ SentinelOps is an installable incident and operations copilot product. This repo
   `uv run sentinelops`
 - Attach the repo-local copilot:
   `uv run sentinelops attach --project-root . --agent all --knowledge-backend chroma`
+- Attach the fully local SentinelOps-only path only if user wants strict no-outside-world debugging:
+  `uv run sentinelops attach --project-root . --knowledge-backend chroma --ollama-host http://localhost:11434`
 - Attach to a centrally managed model endpoint:
   `uv run sentinelops attach --project-root . --agent all --knowledge-backend chroma --ollama-host https://models.example.internal`
 - Pull the reviewed local model set:
@@ -53,6 +55,7 @@ SentinelOps is an installable incident and operations copilot product. This repo
 
 - If you change CLI, install, repo attachment, or agent integration behavior, update `README.md`, `docs/repo-copilot-validation.md`, and the root agent files.
 - Keep the local-first path primary. Shared auth and centralized deployment are optional overlays, not the default repo story.
+- Keep the fully local SentinelOps-only path documented for users who need no outside model calls; avoid requiring cloud/editor agent integrations for that path.
 - If you change the app version, update `app/settings.py`, `pyproject.toml`, `config/*.toml`, `app/schemas.py`, and `uv.lock`.
 - If you change production readiness or commercial boundaries, update `docs/commercial-and-enterprise-usage.md`, `SECURITY.md`, and `NOTICE` when needed.
 - Treat packaged knowledge markdown under `data/` as product fixtures, not repo narrative docs.

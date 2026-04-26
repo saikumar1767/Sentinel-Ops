@@ -1,6 +1,6 @@
 # SentinelOps Agent Setup Guides
 
-Use these guides when installing SentinelOps into a project for a specific coding agent or editor.
+Use these guides when installing SentinelOps into a project for a specific coding agent, editor, or fully local SentinelOps-only workflow.
 
 Each guide assumes the developer's machine may not have the required tools installed yet.
 
@@ -8,6 +8,7 @@ Each guide assumes the developer's machine may not have the required tools insta
 
 | Agent or Editor | Setup Guide | Attach Command |
 | --- | --- | --- |
+| Fully local SentinelOps | [local-only.md](local-only.md) | `sentinelops attach --knowledge-backend chroma --ollama-host http://localhost:11434` |
 | Claude Code | [claude-code.md](claude-code.md) | `sentinelops attach --agent claude --knowledge-backend chroma` |
 | Codex CLI | [codex.md](codex.md) | `sentinelops attach --agent codex --knowledge-backend chroma` |
 | Cursor | [cursor.md](cursor.md) | `sentinelops attach --agent cursor --knowledge-backend chroma` |
@@ -23,6 +24,8 @@ For normal developer usage, install Ollama once on the machine and let every att
 ```text
 http://localhost:11434
 ```
+
+For the no-outside-world path, use [local-only.md](local-only.md). That path avoids generated cloud/editor agent integrations and keeps SentinelOps model calls on localhost or a private LAN/VPN Ollama endpoint.
 
 If the company provides a central model endpoint, add it during attach:
 

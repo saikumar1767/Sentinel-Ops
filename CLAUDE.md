@@ -25,6 +25,14 @@ The main path is:
 
 Local-first personal mode is the default product. Shared auth and centralized deployment are optional overlays.
 
+For strict no-outside-world debugging, SentinelOps can be attached without generated cloud/editor agent integrations:
+
+```bash
+sentinelops attach --knowledge-backend chroma --ollama-host http://localhost:11434
+```
+
+That path relies on local or private LAN/VPN Ollama models and avoids cloud-backed coding-agent calls unless the user separately configures a tool for local inference.
+
 ## Current Brain Contract
 
 - `/investigate` and completed `/workflow/*` responses include typed `root_cause_diagnostics`.
@@ -46,6 +54,7 @@ Local-first personal mode is the default product. Shared auth and centralized de
 - `uv sync`
 - `uv run sentinelops`
 - `uv run sentinelops attach --project-root . --agent all --knowledge-backend chroma`
+- `uv run sentinelops attach --project-root . --knowledge-backend chroma --ollama-host http://localhost:11434` for the fully local SentinelOps-only path
 - `uv run sentinelops attach --project-root . --agent all --knowledge-backend chroma --ollama-host https://models.example.internal` when testing a centrally managed model endpoint
 - `uv run sentinelops pull-models`
 - `uv run sentinelops doctor`
@@ -66,3 +75,4 @@ Local-first personal mode is the default product. Shared auth and centralized de
 - Keep docs and generated instructions aligned with the root-cause diagnostics and incident-memory contract.
 - If install, runtime, validation, or agent integration behavior changes, update README, validation docs, and the root agent files in the same change.
 - Keep the local-first story primary. Do not accidentally make shared-enterprise assumptions the default path.
+- Preserve the fully local SentinelOps-only setup for users who need no outside model calls.

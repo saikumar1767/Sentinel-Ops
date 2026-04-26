@@ -22,7 +22,7 @@ The repo-local experience is acceptable only if all of these are true:
 
 ## Golden Validation Flow
 
-For human-facing install instructions by agent/editor, start with [docs/agents/README.md](agents/README.md).
+For human-facing install instructions by agent/editor or fully local operation, start with [docs/agents/README.md](agents/README.md).
 
 ### 1. Install SentinelOps from GitHub
 
@@ -56,6 +56,20 @@ sentinelops attach --agent all --knowledge-backend chroma
 ```
 
 For the default local workflow, `sentinelops attach` uses Ollama at `http://localhost:11434`.
+
+For strict no-outside-world validation, attach without generated cloud/editor agent integrations:
+
+```bash
+sentinelops attach --knowledge-backend chroma --ollama-host http://localhost:11434
+```
+
+Expected local-only results:
+
+- `.sentinelops/project.toml`
+- `.sentinelops/agent-context.md`
+- no `.claude/`, `.agents/plugins/`, `.cursor/`, `.windsurf/`, `.clinerules/`, or `.github/copilot-instructions.md` SentinelOps integration files unless the user explicitly installs an agent integration later
+- `.sentinelops/project.toml` points `ollama_host` to localhost or a private LAN/VPN endpoint
+- configured model names do not use `:cloud` suffixes when validating a no-outside-world path
 
 When validating a company-managed model endpoint, use:
 
@@ -177,6 +191,7 @@ What it does:
 - shared generated files are merged, not blindly replaced
 - dedicated generated files are only replaced with `--overwrite`
 - `.sentinelops/project.toml` is sufficient to understand what SentinelOps will read and where it will store runtime state
+- the fully local path works without generated cloud/editor agent integrations when users need no outside model calls
 - health and readiness surfaces explain missing dependencies clearly
 - `sentinelops pull-models` removes the need to remember manual model pull commands
 - Claude Code users get repo-local skills and memory files automatically when the repo is attached

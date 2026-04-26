@@ -4,12 +4,15 @@ Use this guide when a team wants every supported SentinelOps agent/editor integr
 
 This is the broadest attach mode. If the team only uses one tool, prefer that tool's dedicated guide:
 
+- [Fully Local SentinelOps](local-only.md)
 - [Claude Code](claude-code.md)
 - [Codex CLI](codex.md)
 - [Cursor](cursor.md)
 - [Windsurf](windsurf.md)
 - [Cline](cline.md)
 - [GitHub Copilot](github-copilot.md)
+
+If the requirement is no outside model calls, use [Fully Local SentinelOps](local-only.md) instead of this all-agent setup. Some coding agents and editors may call their own cloud model providers unless separately configured for local inference.
 
 ## Windows PowerShell From Scratch
 
