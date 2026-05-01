@@ -244,16 +244,22 @@ Core routes:
 - `GET /health`
 - `GET /ready`
 - `GET /ready/strict`
+- `GET /me`
 - `GET /console`
 - `GET /console/overview`
 - `GET /console/incidents`
+- `GET /console/incidents/{incident_id}`
 - `GET /console/timeline`
+- `GET /eval/summary`
 - `POST /knowledge/ingest`
 - `POST /knowledge/search`
 - `POST /analyze`
 - `POST /investigate`
 - `POST /workflow/investigate`
+- `GET /workflow/{thread_id}`
+- `POST /workflow/{thread_id}/resume`
 - `POST /workflow/{thread_id}/approve`
+- `POST /workflow/{thread_id}/reject`
 - `GET /workflow/{thread_id}/audit`
 - `GET /workflow/threads`
 - `GET /metrics`
@@ -264,22 +270,39 @@ Investigation and completed workflow responses include `root_cause_diagnostics`.
 
 ```mermaid
 flowchart LR
-    Engineer["Engineer"] --> Repo["Attached Repo"]
+    Engineer["Engineer or Local Agent"] --> Repo["Attached Repo"]
     Repo --> Config[".sentinelops/project.toml"]
-    Repo --> Docs["Docs and Runbooks"]
+    Repo --> Context["agent-context.md and Optional Agent Files"]
+    Repo --> Docs["Docs, Runbooks, Deploy Files"]
     Repo --> Logs["Allowed Log Roots"]
-    Repo --> Agents["Generated Agent Files"]
-    Config --> API["SentinelOps FastAPI App"]
-    Docs --> Retrieval["Chroma or Simple Index"]
-    Logs --> Tools["Safe File Tools"]
-    Tools --> Brain["Root-Cause Engine"]
-    Retrieval --> Brain
-    Brain --> Workflow["LangGraph Workflow"]
-    Brain --> Response["Typed Incident Response"]
-    Workflow --> Approval["Approval Pause"]
-    Response --> Memory["Saved Incident Memory"]
+    Config --> Runtime["Bootstrap + Pydantic Settings"]
+    Runtime --> API["SentinelOps FastAPI App"]
+    API --> System["Health, Ready, Metrics"]
+    API --> Console["Operator Console"]
+    API --> Eval["Deterministic Eval Summary"]
+    API --> Analyze["Analyze Service"]
+    API --> Investigate["Investigation Service"]
+    API --> Workflow["LangGraph Workflow Service"]
+    Analyze --> Retrieval["Chroma or Simple Index"]
+    Analyze --> Ollama["Ollama Model Host"]
+    Investigate --> Tools["Safe File and Incident Tools"]
+    Investigate --> Retrieval
+    Investigate --> Brain["Root-Cause Engine"]
+    Investigate --> Ollama
+    Workflow --> Graph["LangGraph Nodes"]
+    Graph --> Tools
+    Graph --> Retrieval
+    Graph --> Brain
+    Graph --> Ollama
+    Workflow --> Checkpoints["SQLite or Postgres Checkpoints"]
+    Workflow --> Audit["Audit + Thread Store"]
+    Docs --> Retrieval
+    Logs --> Tools
+    Brain --> Diagnostics["root_cause_diagnostics"]
+    Diagnostics --> Response["Typed Incident / Workflow Response"]
+    Investigate --> Memory["Saved Incident Memory"]
+    Workflow --> Memory
     Memory --> Retrieval
-    API --> Ollama["Ollama Model Host"]
 ```
 
 Main internal pieces:
@@ -291,6 +314,8 @@ Main internal pieces:
 - Ollama gateway
 - Chroma or simple local retrieval
 - LangGraph workflow orchestration
+- deterministic local evaluation harness
+- operator console and runtime health services
 - SQLite persistence for local workflow, audit, and incident state
 
 ## Root-Cause Diagnostics

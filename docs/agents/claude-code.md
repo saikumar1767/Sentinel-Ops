@@ -135,6 +135,7 @@ Skip `git init` if the project is already a Git repo.
 ```text
 .sentinelops/project.toml
 .sentinelops/agent-context.md
+AGENTS.md
 CLAUDE.md
 .claude/skills/sentinelops-check/SKILL.md
 .claude/skills/sentinelops-investigate/SKILL.md
@@ -146,6 +147,8 @@ CLAUDE.md
 ## How Claude Code Knows To Use SentinelOps
 
 Claude Code reads the generated `CLAUDE.md`, `.claude/skills/`, and `.claude/agents/` files.
+
+SentinelOps also merges an `AGENTS.md` block as shared repo guidance for tools that use that convention.
 
 When a user asks about logs, incidents, readiness, deployment failures, runbooks, or remediation, Claude Code should run SentinelOps commands such as:
 

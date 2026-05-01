@@ -91,12 +91,15 @@ code .
 ```text
 .sentinelops/project.toml
 .sentinelops/agent-context.md
+AGENTS.md
 .github/copilot-instructions.md
 ```
 
 ## How GitHub Copilot Knows To Use SentinelOps
 
 GitHub Copilot reads the generated `.github/copilot-instructions.md` file in the repository.
+
+SentinelOps also merges an `AGENTS.md` block as shared repo guidance for tools that use that convention.
 
 When the user asks about logs, incidents, deployment health, readiness, runbooks, or remediation, the instructions tell Copilot to use SentinelOps as the repo-local operational context.
 

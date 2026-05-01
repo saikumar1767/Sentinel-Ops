@@ -67,7 +67,8 @@ Expected local-only results:
 
 - `.sentinelops/project.toml`
 - `.sentinelops/agent-context.md`
-- no `.claude/`, `.agents/plugins/`, `.cursor/`, `.windsurf/`, `.clinerules/`, or `.github/copilot-instructions.md` SentinelOps integration files unless the user explicitly installs an agent integration later
+- no `AGENTS.md` or `CLAUDE.md` SentinelOps blocks unless those files already existed for other reasons
+- no `.claude/`, `.agents/plugins/`, `plugins/sentinelops-copilot/`, `.cursor/`, `.windsurf/`, `.clinerules/`, or `.github/copilot-instructions.md` SentinelOps integration files unless the user explicitly installs an agent integration later
 - `.sentinelops/project.toml` points `ollama_host` to localhost or a private LAN/VPN endpoint
 - configured model names do not use `:cloud` suffixes when validating a no-outside-world path
 
@@ -130,20 +131,30 @@ Expected routes:
 - `GET /ready`
 - `GET /ready/strict`
 - `GET /docs`
+- `GET /me`
 - `GET /console`
+- `GET /console/overview`
+- `GET /console/incidents`
+- `GET /console/incidents/{incident_id}`
+- `GET /console/timeline`
+- `GET /eval/summary`
 - `GET /workflow/threads`
+- `GET /metrics`
 
 ### 6. Exercise the main API paths
 
 Recommended sequence:
 
 1. `POST /knowledge/ingest`
-2. `POST /analyze` with pasted dummy log text
-3. `POST /investigate` with candidate log paths in the dummy repo
-4. `POST /workflow/investigate` with a thread id and approval requirement
-5. `POST /workflow/{thread_id}/approve`
-6. `GET /workflow/{thread_id}/audit`
-7. `GET /workflow/threads`
+2. `POST /knowledge/search` to confirm indexed repo-local evidence
+3. `POST /analyze` with pasted dummy log text
+4. `POST /investigate` with candidate log paths in the dummy repo
+5. `POST /workflow/investigate` with a thread id and approval requirement
+6. `GET /workflow/{thread_id}` to inspect the paused thread
+7. `POST /workflow/{thread_id}/approve`
+8. `GET /workflow/{thread_id}/audit`
+9. `GET /workflow/threads`
+10. `GET /metrics`
 
 Expected investigation and workflow payload checks:
 
@@ -183,6 +194,7 @@ What it does:
 - pulls the configured Ollama models when asked
 - starts the app
 - exercises health, readiness, knowledge ingest, analyze, investigate, workflow approval, audit, and thread listing
+- exercises `/me`, console overview, incident library, timeline, metrics, and prior-incident knowledge search
 - asserts that repo-local runbooks are actually used as evidence
 - checks the install path as a real attached project rather than relying on the SentinelOps source tree as the workspace
 

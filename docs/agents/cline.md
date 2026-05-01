@@ -87,12 +87,15 @@ code .
 ```text
 .sentinelops/project.toml
 .sentinelops/agent-context.md
+AGENTS.md
 .clinerules/sentinelops.md
 ```
 
 ## How Cline Knows To Use SentinelOps
 
 Cline reads the generated `.clinerules/sentinelops.md` rule.
+
+SentinelOps also merges an `AGENTS.md` block as shared repo guidance for tools that use that convention.
 
 When the task touches logs, incidents, readiness, deployment failures, runbooks, or remediation, Cline should use SentinelOps commands and local API routes.
 

@@ -39,6 +39,8 @@ sentinelops attach --agent <agent> --knowledge-backend chroma --ollama-host http
 
 It only adds SentinelOps config, runtime folders, and agent/editor instruction files.
 
+When any agent/editor integration is installed, SentinelOps also merges a SentinelOps-marked block into `AGENTS.md` as shared repo guidance. The fully local guide is the exception because it does not install agent/editor integrations.
+
 ## Official Agent Install References
 
 - Claude Code: https://code.claude.com/docs/en/setup

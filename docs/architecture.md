@@ -30,7 +30,7 @@ flowchart LR
     subgraph Repo["Attached Project"]
         Manifest[".sentinelops/project.toml"]
         AgentContext[".sentinelops/agent-context.md"]
-        Rules["CLAUDE / AGENTS / Codex / Cursor / Windsurf / Copilot"]
+        Rules["CLAUDE / AGENTS / Codex / Cursor / Windsurf / Cline / Copilot"]
         Docs["README / Docs / Runbooks / Workflows"]
         Logs["Configured Log Roots"]
     end
@@ -38,10 +38,13 @@ flowchart LR
     CLI --> AgentContext
     CLI --> Rules
     CLI --> API["FastAPI App"]
+    API --> System["Health, Ready, Metrics"]
     API --> Console["Operator Console"]
+    API --> Eval["Evaluation Summary"]
     API --> Analyze["Analyze Service"]
     API --> Investigate["Investigation Service"]
     API --> Workflow["Workflow Service"]
+    API --> Knowledge["Knowledge Routes"]
     Analyze --> Docs
     Investigate --> Docs
     Investigate --> Logs
@@ -55,8 +58,10 @@ flowchart LR
     Analyze --> Retrieval["Simple Index or Chroma"]
     Investigate --> Retrieval
     Workflow --> Retrieval
+    Knowledge --> Retrieval
     Brain --> IncidentMemory["Saved Incident Memory"]
     IncidentMemory --> Retrieval
+    Eval --> EvalFixtures["Packaged Eval Fixtures"]
     Workflow --> RuntimeState["Repo-local Runtime State"]
 ```
 
@@ -222,6 +227,9 @@ flowchart LR
 | `data/knowledge/` | packaged runbooks and reference knowledge |
 | `data/incident_library/` | packaged incident profiles |
 | `data/reference_incidents/` | packaged examples for comparison and evaluation |
+| `data/eval_cases/` | packaged analyze evaluation cases |
+| `data/tool_eval_cases/` | packaged investigation and workflow evaluation cases |
+| `data/rag_eval_cases/` | packaged retrieval evaluation cases |
 | attached repo doc roots | project-specific operational context |
 | attached repo log roots | project-specific live or recent evidence |
 | saved incident summaries | repo-local incident memory that can be upserted into retrieval |
@@ -234,7 +242,7 @@ Generated integrations are product surfaces, not side artifacts.
 flowchart LR
     Manifest[".sentinelops/project.toml"] --> AgentContext[".sentinelops/agent-context.md"]
     Manifest --> Claude[".claude/skills + .claude/agents + CLAUDE.md"]
-    Manifest --> AGENTS["AGENTS.md block"]
+    Manifest --> AGENTS["AGENTS.md block for any agent install"]
     Manifest --> Codex["Codex plugin bundle"]
     Manifest --> Cursor["Cursor rule"]
     Manifest --> Windsurf["Windsurf rule"]
@@ -245,6 +253,7 @@ flowchart LR
 The contract is simple:
 
 - SentinelOps writes the repo-local config and context
+- `AGENTS.md` is merged whenever an agent/editor integration is installed
 - generated tools point back to those files
 - shared files are merged, not blindly overwritten
 

@@ -78,12 +78,15 @@ sentinelops start --no-browser
 ```text
 .sentinelops/project.toml
 .sentinelops/agent-context.md
+AGENTS.md
 .windsurf/rules/sentinelops.md
 ```
 
 ## How Windsurf Knows To Use SentinelOps
 
 Windsurf reads the generated `.windsurf/rules/sentinelops.md` rule.
+
+SentinelOps also merges an `AGENTS.md` block as shared repo guidance for tools that use that convention.
 
 When the task involves incidents, logs, deploy health, readiness, runbooks, or remediation, Windsurf should use SentinelOps as the repo-local operations source of truth.
 

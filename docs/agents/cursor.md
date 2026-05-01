@@ -78,12 +78,15 @@ sentinelops start --no-browser
 ```text
 .sentinelops/project.toml
 .sentinelops/agent-context.md
+AGENTS.md
 .cursor/rules/sentinelops.mdc
 ```
 
 ## How Cursor Knows To Use SentinelOps
 
 Cursor reads the generated `.cursor/rules/sentinelops.mdc` rule.
+
+SentinelOps also merges an `AGENTS.md` block as shared repo guidance for tools that use that convention.
 
 When the task involves logs, incidents, deploy failures, readiness, runbooks, or remediation, Cursor should prefer SentinelOps context and commands.
 
